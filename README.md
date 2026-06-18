@@ -144,10 +144,10 @@ MIT
 
 This is an open project. Feel free to open issues, submit PRs, or suggest features.
 
-## Roadmap
+## Potential Added Features
 
-- [ ] Volume fade before stopping
-- [ ] Client app support (Android TV, iOS, etc.)
-- [ ] Localization
-- [ ] Auto-install player button (if Jellyfin adds plugin injection support)
-- [ ] Per-user default timer profiles
+- Volume fade before stopping
+- Client app support (Android TV, iOS, etc.)
+- Localization
+- Auto-install player button (if Jellyfin adds plugin injection support)
+- Per-user default timer profiles
