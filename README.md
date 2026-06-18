@@ -135,7 +135,7 @@ MIT
 
 This is an open project. Feel free to open issues, submit PRs, or suggest features.
 
-## Potential Added Features
+## Potential Future Updates
 
 - Volume fade before stopping
 - Episode-based stopping (stop after N episodes)
