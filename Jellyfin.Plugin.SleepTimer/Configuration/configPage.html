@@ -200,6 +200,12 @@
                     }
 
                     document.getElementById('installBtn').addEventListener('click', function() {
+                        // Clear old install first
+                        localStorage.removeItem('sleeptimer_code');
+                        localStorage.removeItem(INJECT_KEY);
+                        // Clear any running timers from old script
+                        if (window.__sleepTimerCleanup) { window.__sleepTimerCleanup(); }
+                        
                         fetch(getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js')
                             .then(function(r) { return r.text(); })
                             .then(function(code) {

@@ -4,12 +4,12 @@
 (function() {
     'use strict';
 
+    // Clean up any previous instance
+    if (window.__sleepTimerCleanup) { window.__sleepTimerCleanup(); }
+
     const PLUGIN_ID = 'a3f1c7d2-8e4b-4f6a-9c1d-2b5e8a7f3d60';
     let sleepTimerInterval = null;
     let sleepTimerEnd = null;
-    let sleepTimerMode = 'duration'; // 'duration' or 'episodes'
-    let sleepTimerEpisodeCount = 0;
-    let sleepTimerEpisodesPlayed = 0;
 
     // Create the sleep timer button for the OSD
     function createSleepTimerButton() {
@@ -81,8 +81,7 @@
 
             <div style="margin-bottom:12px">
                 <div style="display:flex;gap:8px;margin-bottom:12px">
-                    <button id="stModeDuration" style="flex:1;padding:8px;background:${sleepTimerMode==='duration'?'#0084ff':'#1a1a1a'};color:#fff;border:none;border-radius:4px;cursor:pointer">Time</button>
-                    <button id="stModeEpisodes" style="flex:1;padding:8px;background:${sleepTimerMode==='episodes'?'#0084ff':'#1a1a1a'};color:#fff;border:none;border-radius:4px;cursor:pointer">Episodes</button>
+                    <button id="stModeDuration" style="flex:1;padding:8px;background:#0084ff;color:#fff;border:none;border-radius:4px;cursor:pointer">Time</button>
                 </div>
             </div>
 
@@ -102,18 +101,7 @@
                 </div>
             </div>
 
-            <div id="stEpisodesSection" style="margin-bottom:16px;display:none">
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-                    <button class="stEpPreset" data-eps="1" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">1</button>
-                    <button class="stEpPreset" data-eps="2" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">2</button>
-                    <button class="stEpPreset" data-eps="3" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">3</button>
-                    <button class="stEpPreset" data-eps="5" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">5</button>
-                </div>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="number" id="stCustomEps" min="1" max="50" placeholder="Custom" style="width:80px;background:#1a1a1a;border:1px solid #333;color:#ddd;padding:6px;border-radius:4px" />
-                    <span style="color:#888;font-size:0.85rem">episodes</span>
-                    <button id="stStartEps" style="margin-left:auto;padding:6px 16px;background:#0084ff;color:#fff;border:none;border-radius:4px;cursor:pointer">Start</button>
-                </div>
+            <div id="stEpisodesSection" style="display:none">
             </div>
 
             <div id="stActiveControls" style="display:${activeTimer > 0 ? 'block' : 'none'};margin-bottom:12px;padding-top:12px;border-top:1px solid #333">
@@ -130,24 +118,7 @@
 
         document.body.appendChild(panel);
 
-        // Mode toggle
-        document.getElementById('stModeDuration').addEventListener('click', () => {
-            sleepTimerMode = 'duration';
-            document.getElementById('stModeDuration').style.background = '#0084ff';
-            document.getElementById('stModeEpisodes').style.background = '#1a1a1a';
-            document.getElementById('stDurationSection').style.display = 'block';
-            document.getElementById('stEpisodesSection').style.display = 'none';
-        });
-
-        document.getElementById('stModeEpisodes').addEventListener('click', () => {
-            sleepTimerMode = 'episodes';
-            document.getElementById('stModeEpisodes').style.background = '#0084ff';
-            document.getElementById('stModeDuration').style.background = '#1a1a1a';
-            document.getElementById('stDurationSection').style.display = 'none';
-            document.getElementById('stEpisodesSection').style.display = 'block';
-        });
-
-        // Preset duration buttons
+        // Duration presets
         document.querySelectorAll('.stPreset').forEach(btn => {
             btn.addEventListener('click', () => {
                 startDurationTimer(parseInt(btn.dataset.mins));
@@ -160,23 +131,6 @@
             const mins = parseInt(document.getElementById('stCustomMins').value);
             if (mins > 0) {
                 startDurationTimer(mins);
-                panel.remove();
-            }
-        });
-
-        // Preset episode buttons
-        document.querySelectorAll('.stEpPreset').forEach(btn => {
-            btn.addEventListener('click', () => {
-                startEpisodeTimer(parseInt(btn.dataset.eps));
-                panel.remove();
-            });
-        });
-
-        // Custom episodes
-        document.getElementById('stStartEps').addEventListener('click', () => {
-            const eps = parseInt(document.getElementById('stCustomEps').value);
-            if (eps > 0) {
-                startEpisodeTimer(eps);
                 panel.remove();
             }
         });
@@ -213,14 +167,6 @@
         notify('Sleep timer started: ' + minutes + ' minutes');
     }
 
-    function startEpisodeTimer(episodes) {
-        sleepTimerMode = 'episodes';
-        sleepTimerEpisodeCount = episodes;
-        sleepTimerEpisodesPlayed = 0;
-        sleepTimerEnd = null;
-        notify('Sleep timer: stop after ' + episodes + ' episode' + (episodes > 1 ? 's' : ''));
-    }
-
     function startCountdown() {
         if (sleepTimerInterval) clearInterval(sleepTimerInterval);
         sleepTimerInterval = setInterval(() => {
@@ -249,9 +195,6 @@
             sleepTimerInterval = null;
         }
         sleepTimerEnd = null;
-        sleepTimerMode = 'duration';
-        sleepTimerEpisodeCount = 0;
-        sleepTimerEpisodesPlayed = 0;
         const countdown = document.getElementById('sleepTimerCountdown');
         if (countdown) countdown.textContent = '';
         const activeControls = document.getElementById('stActiveControls');
@@ -259,45 +202,65 @@
     }
 
     function stopPlayback() {
-        // Use Jellyfin's internal API client
-        const ApiClient = window.ApiClient || (window.require && window.require(['lib/jellyfin-apiclient']));
-        if (window.ApiClient) {
-            // Send stop command via API
-            fetch(ApiClient.serverAddress + '/Sessions/Playing/Stopped', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Emby-Token': ApiClient.accessToken()
-                },
-                body: JSON.stringify({})
-            }).catch(() => {});
+        console.log('[SleepTimer] Attempting to stop playback...');
+        var apiClient = window.ApiClient;
+        if (!apiClient) {
+            console.error('[SleepTimer] No ApiClient available');
+            var exitBtn = document.querySelector('.btnExit');
+            if (exitBtn) { console.log('[SleepTimer] Clicking btnExit'); exitBtn.click(); }
+            return;
+        }
 
-            // Also try the playstate command
-            const sessions = ApiClient.getSessions ? ApiClient.getSessions() : null;
-            if (sessions) {
-                sessions.then(s => {
-                    const session = s.find(x => x.UserId === ApiClient.getCurrentUserId());
-                    if (session) {
-                        fetch(ApiClient.serverAddress + '/Sessions/' + session.Id + '/Playing/Playstate', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-Emby-Token': ApiClient.accessToken()
-                            },
-                            body: JSON.stringify({ Command: 'Stop' })
-                        }).catch(() => {});
+        var token = apiClient.accessToken();
+        var userId = apiClient.getCurrentUserId();
+        console.log('[SleepTimer] token:', token ? token.substring(0,8)+'...' : 'NONE', 'userId:', userId);
+
+        // Use apiClient.getUrl() to build the URL correctly
+        var sessionsUrl = apiClient.getUrl('Sessions');
+        console.log('[SleepTimer] Sessions URL:', sessionsUrl);
+
+        // Method 1: Find active session and send Stop command
+        fetch(sessionsUrl, {
+            headers: { 'X-Emby-Token': token }
+        })
+        .then(function(r) { 
+            console.log('[SleepTimer] Sessions response:', r.status, r.statusText);
+            if (!r.ok) throw new Error('Sessions request failed: ' + r.status);
+            return r.json(); 
+        })
+        .then(function(sessions) {
+            console.log('[SleepTimer] Found', sessions.length, 'sessions');
+            var mySession = sessions.find(function(s) {
+                return s.UserId === userId && s.NowPlayingItem != null;
+            });
+            if (mySession) {
+                console.log('[SleepTimer] Found active session:', mySession.Id, 'playing:', mySession.NowPlayingItem.Name);
+                var stopUrl = apiClient.getUrl('Sessions/' + mySession.Id + '/Playing/Stop');
+                console.log('[SleepTimer] Stop URL:', stopUrl);
+                fetch(stopUrl, {
+                    method: 'POST',
+                    headers: { 'X-Emby-Token': token }
+                })
+                .then(function(r) { console.log('[SleepTimer] Stop response:', r.status, r.statusText); })
+                .catch(function(e) { console.error('[SleepTimer] Stop failed:', e); });
+            } else {
+                console.log('[SleepTimer] No active playing session found');
+                // List all sessions for this user for debugging
+                sessions.forEach(function(s) {
+                    if (s.UserId === userId) {
+                        console.log('[SleepTimer] Session:', s.Id, 'Device:', s.DeviceName, 'Playing:', !!s.NowPlayingItem);
                     }
-                }).catch(() => {});
+                });
             }
-        }
+        })
+        .catch(function(e) { console.error('[SleepTimer] Session lookup failed:', e); });
 
-        // Fallback: simulate pressing the stop button
-        const stopBtn = document.querySelector('.btnPause');
-        if (stopBtn) {
-            // Try to find and click the back/stop button
-            const exitBtn = document.querySelector('.btnExit');
-            if (exitBtn) exitBtn.click();
-        }
+        // Method 2: DOM fallback after delay
+        setTimeout(function() {
+            console.log('[SleepTimer] Trying DOM fallback');
+            var exitBtn = document.querySelector('.btnExit');
+            if (exitBtn) { console.log('[SleepTimer] Clicking btnExit'); exitBtn.click(); }
+        }, 1000);
     }
 
     function notify(message) {
@@ -310,21 +273,6 @@
             console.log('[SleepTimer] ' + message);
         }
     }
-
-    // Listen for playback stop events (for episode counting)
-    document.addEventListener('viewshow', (e) => {
-        if (sleepTimerMode === 'episodes' && sleepTimerEpisodeCount > 0) {
-            // Check if we just left the video player
-            const view = e.detail && e.detail.view;
-            if (view && view.type !== 'video-osd') {
-                sleepTimerEpisodesPlayed++;
-                if (sleepTimerEpisodesPlayed >= sleepTimerEpisodeCount) {
-                    stopPlayback();
-                    cancelTimer();
-                }
-            }
-        }
-    });
 
     // Try to inject the button periodically when the player is open
     const injectInterval = setInterval(() => {
@@ -340,6 +288,21 @@
         }
     });
     observer.observe(document.body, { childList: true, subtree: true });
+    window.__sleepTimerObserver = observer;
+
+    // Cleanup function for re-install
+    window.__sleepTimerCleanup = function() {
+        if (sleepTimerInterval) clearInterval(sleepTimerInterval);
+        sleepTimerInterval = null;
+        sleepTimerEnd = null;
+        var observer2 = window.__sleepTimerObserver;
+        if (observer2) observer2.disconnect();
+        var oldBtn = document.querySelector('.btnSleepTimer');
+        if (oldBtn) oldBtn.remove();
+        var oldPanel = document.getElementById('sleepTimerPanel');
+        if (oldPanel) oldPanel.remove();
+        console.log('[SleepTimer] Cleaned up previous instance');
+    };
 
     console.log('[SleepTimer] Injected. Looking for player OSD...');
 })();

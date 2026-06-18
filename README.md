@@ -5,7 +5,6 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that automatically sto
 ## Features
 
 - **Time-based timer**: Set a countdown (15m, 30m, 45m, 1h, 1.5h, 2h, or custom) and playback stops automatically when it reaches zero
-- **Episode-based timer**: Stop after a specific number of episodes finish playing (1, 2, 3, 5, or custom)
 - **Pre-stop notification**: Optional on-screen notification before playback stops (configurable lead time)
 - **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
 - **Cancel anytime**: One-click cancel from the sleep timer panel
@@ -68,21 +67,13 @@ The install stores a script in your browser's `localStorage` and auto-loads it o
 
 ## Usage
 
-### Time-based timer
+### Setting a timer
 
 1. Play any video
 2. Click the moon icon in the player controls
 3. Choose a preset duration or enter a custom number of minutes
 4. Click **Start**
 5. A countdown displays in the panel. Use **+15m**, **+30m**, or **Cancel** as needed
-
-### Episode-based timer
-
-1. Play a TV show
-2. Click the moon icon
-3. Switch to **Episodes** mode
-4. Choose how many episodes to play before stopping
-5. Playback stops after that many episodes finish
 
 ### What happens when the timer ends
 
@@ -126,9 +117,9 @@ POST /SleepTimer/Start
 ## Limitations
 
 - The player button requires per-device installation (Jellyfin plugin framework limitation)
-- Episode counting relies on Jellyfin's navigation events and may not work perfectly on all client types
 - Currently English-only (no localization)
 - Volume fade is not yet implemented (planned for future release)
+- Episode-based stopping (may be added in the future)
 
 ## Tech Stack
 
@@ -147,6 +138,7 @@ This is an open project. Feel free to open issues, submit PRs, or suggest featur
 ## Potential Added Features
 
 - Volume fade before stopping
+- Episode-based stopping (stop after N episodes)
 - Client app support (Android TV, iOS, etc.)
 - Localization
 - Auto-install player button (if Jellyfin adds plugin injection support)
