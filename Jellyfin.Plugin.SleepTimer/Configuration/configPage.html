@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+    </head>
+    <body>
+        <div id="SleepTimerConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox,emby-linkbutton">
+            <div data-role="content">
+                <style>
+                    #SleepTimerConfigPage .sleepTimerContainer {
+                        max-width: 680px;
+                        margin: 2rem auto;
+                        padding: 0 1.5rem;
+                    }
+                    #SleepTimerConfigPage h2 {
+                        color: #fff;
+                        margin: 0 0 1.5rem 0;
+                        font-size: 1.5rem;
+                    }
+                    #SleepTimerConfigPage .sleepTimerSection {
+                        margin-bottom: 2rem;
+                    }
+                    #SleepTimerConfigPage .sleepTimerLabel {
+                        display: block;
+                        margin-bottom: 0.4rem;
+                        color: #ccc;
+                        font-size: 0.9rem;
+                        font-weight: 500;
+                    }
+                    #SleepTimerConfigPage .sleepTimerInfo {
+                        color: #888;
+                        font-size: 0.85rem;
+                        margin-top: 0.4rem;
+                        line-height: 1.4;
+                    }
+                    #SleepTimerConfigPage .sleepTimerStatus {
+                        padding: 0.8rem 1rem;
+                        border-radius: 6px;
+                        margin-bottom: 1.5rem;
+                        font-size: 0.9rem;
+                    }
+                    #SleepTimerConfigPage .sleepTimerStatus.active {
+                        background: rgba(46,125,50,0.15);
+                        color: #4caf50;
+                        border: 1px solid #2e7d32;
+                    }
+                    #SleepTimerConfigPage .sleepTimerStatus.inactive {
+                        background: rgba(255,255,255,0.05);
+                        color: #888;
+                        border: 1px solid #333;
+                    }
+                    #SleepTimerConfigPage .sleepTimerBtn {
+                        padding: 0.6rem 1.2rem;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        border: none;
+                        font-size: 0.9rem;
+                        transition: background 0.2s;
+                    }
+                    #SleepTimerConfigPage .sleepTimerBtn.install {
+                        background: #2e7d32;
+                        color: white;
+                    }
+                    #SleepTimerConfigPage .sleepTimerBtn.install:hover {
+                        background: #1b5e20;
+                    }
+                    #SleepTimerConfigPage .sleepTimerBtn.save {
+                        background: #0084ff;
+                        color: white;
+                        padding: 0.7rem 2rem;
+                        font-size: 1rem;
+                    }
+                    #SleepTimerConfigPage .sleepTimerBtn.save:hover {
+                        background: #006acc;
+                    }
+                    #SleepTimerConfigPage .sleepTimerCheckbox {
+                        display: flex;
+                        align-items: center;
+                        gap: 0.6rem;
+                    }
+                    #SleepTimerConfigPage .sleepTimerInput {
+                        background: #1a1a1a;
+                        border: 1px solid #333;
+                        color: #ddd;
+                        padding: 0.5rem 0.8rem;
+                        border-radius: 4px;
+                        width: 140px;
+                        font-size: 0.9rem;
+                    }
+                    #SleepTimerConfigPage .sleepTimerDivider {
+                        border: none;
+                        border-top: 1px solid #222;
+                        margin: 2rem 0;
+                    }
+                </style>
+
+                <div class="sleepTimerContainer">
+                    <h2>Sleep Timer</h2>
+
+                    <div id="injectStatus" class="sleepTimerStatus inactive">Sleep button: not installed on this device</div>
+                    <button id="installBtn" class="sleepTimerBtn install">Install sleep button on this device</button>
+
+                    <hr class="sleepTimerDivider" />
+
+                    <div class="sleepTimerSection">
+                        <p class="sleepTimerInfo">
+                            The sleep timer adds a button to the video player OSD next to the subtitle button.
+                            Click it to set a timer (by duration or episode count) that stops playback automatically.
+                        </p>
+                    </div>
+
+                    <div class="sleepTimerSection">
+                        <label class="sleepTimerLabel">Default Duration (minutes)</label>
+                        <input type="number" id="defaultDuration" min="1" max="600" value="30" class="sleepTimerInput" />
+                    </div>
+
+                    <div class="sleepTimerSection">
+                        <label class="sleepTimerLabel">Pre-Stop Notification</label>
+                        <div class="sleepTimerCheckbox">
+                            <input type="checkbox" id="showNotification" checked />
+                            <span style="color:#ccc">Show a notification before playback stops</span>
+                        </div>
+                    </div>
+
+                    <div class="sleepTimerSection">
+                        <label class="sleepTimerLabel">Notification Lead Time (seconds)</label>
+                        <input type="number" id="notifyLeadTime" min="5" max="120" value="30" class="sleepTimerInput" />
+                    </div>
+
+                    <button class="sleepTimerBtn save" onclick="saveConfig()">Save</button>
+                </div>
+
+                <script>
+                function getApiBase() {
+                    if (window.ApiClient) return window.ApiClient.serverAddress().replace(/\/+$/, "");
+                    return '';
+                }
+
+                function getAuthToken() {
+                    if (window.ApiClient) return window.ApiClient.accessToken();
+                    return '';
+                }
+
+                function authHeaders() {
+                    return {
+                        'Authorization': 'MediaBrowser Token=' + getAuthToken(),
+                        'Content-Type': 'application/json'
+                    };
+                }
+
+                async function loadConfig() {
+                    try {
+                        var res = await fetch(getApiBase() + '/SleepTimer/Config', {
+                            headers: authHeaders()
+                        });
+                        if (res.ok) {
+                            var config = await res.json();
+                            document.getElementById('defaultDuration').value = config.DefaultDurationMinutes || 30;
+                            document.getElementById('showNotification').checked = config.ShowNotification !== false;
+                            document.getElementById('notifyLeadTime').value = config.NotificationLeadTimeSeconds || 30;
+                        }
+                    } catch (e) {
+                        console.error('[SleepTimer] Failed to load config:', e);
+                    }
+                }
+
+                async function saveConfig() {
+                    try {
+                        var res = await fetch(getApiBase() + '/SleepTimer/Config', {
+                            method: 'POST',
+                            headers: authHeaders(),
+                            body: JSON.stringify({
+                                DefaultDurationMinutes: parseInt(document.getElementById('defaultDuration').value),
+                                ShowNotification: document.getElementById('showNotification').checked,
+                                NotificationLeadTimeSeconds: parseInt(document.getElementById('notifyLeadTime').value)
+                            })
+                        });
+                        if (res.ok) {
+                            alert('Configuration saved');
+                        } else {
+                            alert('Failed to save: ' + res.status + ' ' + res.statusText);
+                        }
+                    } catch (e) {
+                        alert('Error: ' + e.message);
+                    }
+                }
+
+                (function() {
+                    var INJECT_KEY = '***';
+
+                    function checkInstalled() {
+                        var installed = localStorage.getItem(INJECT_KEY) === 'true';
+                        var status = document.getElementById('injectStatus');
+                        var btn = document.getElementById('installBtn');
+                        if (installed) {
+                            status.className = 'sleepTimerStatus active';
+                            status.textContent = 'Sleep button: installed on this device';
+                            btn.textContent = 'Reinstall sleep button';
+                        }
+                    }
+
+                    document.getElementById('installBtn').addEventListener('click', function() {
+                        fetch(getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js')
+                            .then(function(r) { return r.text(); })
+                            .then(function(code) {
+                                localStorage.setItem('sleeptimer_code', code);
+                                localStorage.setItem(INJECT_KEY, 'true');
+                                try { window.top.eval(code); } catch(e) { console.error('[SleepTimer] Injection error:', e); }
+                                checkInstalled();
+                            })
+                            .catch(function(e) { alert('Failed to install: ' + e.message); });
+                    });
+
+                    checkInstalled();
+                })();
+
+                (function autoLoad() {
+                    if (localStorage.getItem('sleeptimer_installed') === 'true') {
+                        var code = localStorage.getItem('sleeptimer_code');
+                        if (code) {
+                            try { window.top.eval(code); } catch(e) { console.error('[SleepTimer] Auto-load error:', e); }
+                        }
+                    }
+                })();
+
+                loadConfig();
+                </script>
+            </div>
+        </div>
+    </body>
+</html>

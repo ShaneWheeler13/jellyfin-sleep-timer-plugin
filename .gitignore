@@ -1,0 +1,28 @@
+# Build artifacts
+**/bin/
+**/obj/
+*.dll
+*.pdb
+*.deps.json
+*.xml
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets - NEVER commit
+*.key
+*.pem
+*.token
+credentials*
+secrets*
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
