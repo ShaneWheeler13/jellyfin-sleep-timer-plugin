@@ -54,6 +54,15 @@
             return;
         }
 
+        let autoCloseTimer = null;
+        function startAutoClose() {
+            if (autoCloseTimer) clearTimeout(autoCloseTimer);
+            autoCloseTimer = setTimeout(function() {
+                var p = document.getElementById('sleepTimerPanel');
+                if (p) p.remove();
+            }, 4000);
+        }
+
         const panel = document.createElement('div');
         panel.id = 'sleepTimerPanel';
         panel.style.cssText = `
@@ -79,60 +88,61 @@
                 ${activeTimer > 0 ? `<span id="sleepTimerCountdown" style="font-size:1rem;color:#0084ff">${formatTime(activeTimer)}</span>` : ''}
             </div>
 
-            <div style="margin-bottom:12px">
-                <div style="display:flex;gap:8px;margin-bottom:12px">
-                    <button id="stModeDuration" style="flex:1;padding:8px;background:#0084ff;color:#fff;border:none;border-radius:4px;cursor:pointer">Time</button>
-                </div>
-            </div>
-
             <div id="stDurationSection" style="margin-bottom:16px">
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-                    <button class="stPreset" data-mins="15" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">15m</button>
-                    <button class="stPreset" data-mins="30" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">30m</button>
-                    <button class="stPreset" data-mins="45" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">45m</button>
-                    <button class="stPreset" data-mins="60" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">1h</button>
-                    <button class="stPreset" data-mins="90" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">1.5h</button>
-                    <button class="stPreset" data-mins="120" style="padding:6px 12px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">2h</button>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+                    <button class="stPreset" data-mins="15" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">15m</button>
+                    <button class="stPreset" data-mins="30" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">30m</button>
+                    <button class="stPreset" data-mins="45" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">45m</button>
+                    <button class="stPreset" data-mins="60" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">1h</button>
+                    <button class="stPreset" data-mins="90" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">1.5h</button>
+                    <button class="stPreset" data-mins="120" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">2h</button>
                 </div>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="number" id="stCustomMins" min="1" max="600" placeholder="Custom" style="width:80px;background:#1a1a1a;border:1px solid #333;color:#ddd;padding:6px;border-radius:4px" />
-                    <span style="color:#888;font-size:0.85rem">minutes</span>
-                    <button id="stStartCustom" style="margin-left:auto;padding:6px 16px;background:#0084ff;color:#fff;border:none;border-radius:4px;cursor:pointer">Start</button>
-                </div>
-            </div>
 
-            <div id="stEpisodesSection" style="display:none">
+                <div style="display:flex;align-items:center;gap:6px;margin-top:12px">
+                    <button id="stDecrement" style="width:36px;height:36px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:1.1rem">-</button>
+                    <div style="flex:1;text-align:center;color:#ddd;font-size:0.95rem"><span id="stCustomDisplay">30</span> min</div>
+                    <button id="stIncrement" style="width:36px;height:36px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:1.1rem">+</button>
+                    <button id="stStartCustom" style="padding:8px 20px;background:#0084ff;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Start</button>
+                </div>
             </div>
 
             <div id="stActiveControls" style="display:${activeTimer > 0 ? 'block' : 'none'};margin-bottom:12px;padding-top:12px;border-top:1px solid #333">
                 <div style="display:flex;gap:8px">
-                    <button id="stAdd15" style="flex:1;padding:6px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">+15m</button>
-                    <button id="stAdd30" style="flex:1;padding:6px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;cursor:pointer">+30m</button>
-                    <button id="stCancel" style="flex:1;padding:6px;background:#d32f2f;color:#fff;border:none;border-radius:4px;cursor:pointer">Cancel</button>
+                    <button id="stAdd15" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer">+15m</button>
+                    <button id="stAdd30" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer">+30m</button>
+                    <button id="stCancel" style="flex:1;padding:8px;background:#d32f2f;color:#fff;border:none;border-radius:6px;cursor:pointer">Cancel</button>
                 </div>
-            </div>
-
-            <div style="margin-top:12px;padding-top:12px;border-top:1px solid #333">
             </div>
         `;
 
         document.body.appendChild(panel);
+        
+:        // Auto-close after 4 seconds of inactivity, reset on any click
+        panel.addEventListener('click', startAutoClose);
+        startAutoClose();
 
         // Duration presets
         document.querySelectorAll('.stPreset').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (autoCloseTimer) clearTimeout(autoCloseTimer);
                 startDurationTimer(parseInt(btn.dataset.mins));
                 panel.remove();
             });
         });
 
-        // Custom duration
+        // Custom duration stepper
+        let customMins = 30;
+        const customDisplay = document.getElementById('stCustomDisplay');
+        document.getElementById('stDecrement').addEventListener('click', () => {
+            if (customMins > 1) { customMins -= 1; customDisplay.textContent = customMins; }
+        });
+        document.getElementById('stIncrement').addEventListener('click', () => {
+            if (customMins < 600) { customMins += 1; customDisplay.textContent = customMins; }
+        });
         document.getElementById('stStartCustom').addEventListener('click', () => {
-            const mins = parseInt(document.getElementById('stCustomMins').value);
-            if (mins > 0) {
-                startDurationTimer(mins);
-                panel.remove();
-            }
+            if (autoCloseTimer) clearTimeout(autoCloseTimer);
+            startDurationTimer(customMins);
+            panel.remove();
         });
 
         // Active timer controls
@@ -162,7 +172,6 @@
 
     function startDurationTimer(minutes) {
         sleepTimerEnd = Date.now() + minutes * 60 * 1000;
-        sleepTimerMode = 'duration';
         startCountdown();
         notify('Sleep timer started: ' + minutes + ' minutes');
     }

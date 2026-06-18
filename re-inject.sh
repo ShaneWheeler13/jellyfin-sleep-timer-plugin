@@ -1,8 +1,7 @@
 #!/bin/bash
-# Re-inject sleep timer script after Jellyfin container restart
-# Usage: run after docker restart jellyfin
+# Re-inject sleep timer autoloader after Jellyfin container restart
+# Run this after each container restart
 
-docker exec jellyfin cp /jellyfin/jellyfin-web/index.html.bak /jellyfin/jellyfin-web/index.html.bak 2>/dev/null
-docker cp /home/pirrot/.openclaw/workspace/jellyfin-sleep-timer/sleep-timer-inject.js jellyfin:/jellyfin/jellyfin-web/sleep-timer-inject.js
-docker exec jellyfin sh -c 'sed "s|</body>|<script src=\"sleep-timer-inject.js\"></script></body>|" /jellyfin/jellyfin-web/index.html.bak > /jellyfin/jellyfin-web/index.html'
-echo "Sleep timer script re-injected"
+docker cp /home/pirrot/.openclaw/workspace/jellyfin-sleep-timer/sleeptimer-autoloader.js jellyfin:/jellyfin/jellyfin-web/sleeptimer-autoloader.js
+docker exec jellyfin sh -c 'cat /jellyfin/jellyfin-web/index.html | grep -q sleeptimer-autoloader || sed "s|</body>|<script src=\"sleeptimer-autoloader.js\"></script></body>|" /jellyfin/jellyfin-web/index.html > /tmp/index.html && mv /tmp/index.html /jellyfin/jellyfin-web/index.html'
+echo "Sleep timer autoloader injected"
