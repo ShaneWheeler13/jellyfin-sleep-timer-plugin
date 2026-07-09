@@ -1,14 +1,16 @@
 # Jellyfin Sleep Timer Plugin
 
-A sleep timer plugin for [Jellyfin](https://jellyfin.org) that automatically stops media playback after a set duration or number of episodes. Perfect for falling asleep to TV shows without leaving playback running all night.
+A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playback after a set duration. Perfect for falling asleep to TV shows without leaving playback running all night.
 
 ## Features
 
-- **Time-based timer**: Set a countdown (15m, 30m, 45m, 1h, 1.5h, 2h, or custom) and playback stops automatically when it reaches zero
-- **Pre-stop notification**: Optional on-screen notification before playback stops (configurable lead time)
+- **Preset durations**: 15m, 30m, 45m, 1h, 1.5h, 2h -- no fiddling with custom inputs
+- **"Are you still watching?" popup**: When the timer hits zero, a centered dialog appears with a 60-second countdown. Playback only stops if you don't respond or click "Stop Now". Click "Continue Watching" to dismiss and keep playing.
+- **Pre-stop notification**: Optional on-screen toast before the popup appears (configurable lead time)
 - **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
 - **Cancel anytime**: One-click cancel from the sleep timer panel
-- **Dashboard config page**: Set default duration, notification preferences, and install the player button per device
+- **Per-device install/uninstall**: Install and uninstall the player button directly from the plugin config page -- no manual localStorage hacking
+- **Dashboard config page**: Set default duration and notification preferences
 
 ## Compatibility
 
@@ -59,11 +61,20 @@ After installing the plugin and restarting Jellyfin:
 The sleep timer button isn't automatically added to the web player. Jellyfin's plugin system doesn't support injecting into the player UI natively, so each device needs a one-time install:
 
 1. On the device you watch Jellyfin on, go to **Dashboard > Plugins > Sleep Timer**
-2. Click **"Install sleep button on this device"**
+2. Click **"Install sleep button"**
 3. The moon icon (bedtime) will appear in the video player OSD next to the subtitle button
 4. Repeat on each device you want the button on
 
-The install stores a script in your browser's `localStorage` and auto-loads it on future visits. No server-side changes are needed.
+### Uninstalling the player button
+
+To remove the sleep timer button from a device:
+
+1. Go to **Dashboard > Plugins > Sleep Timer** on that device
+2. Click **"Uninstall"** (next to the Install button)
+3. The button, panel, and any active popup are immediately removed
+4. The script is cleared from the browser's `localStorage`
+
+No server restart needed -- install and uninstall take effect instantly.
 
 ## Usage
 
@@ -71,21 +82,25 @@ The install stores a script in your browser's `localStorage` and auto-loads it o
 
 1. Play any video
 2. Click the moon icon in the player controls
-3. Choose a preset duration or enter a custom number of minutes
-4. Click **Start**
-5. A countdown displays in the panel. Use **+15m**, **+30m**, or **Cancel** as needed
+3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h)
+4. The panel auto-closes after 4 seconds of inactivity
+5. A countdown displays in the panel header. Use **+15m**, **+30m**, or **Cancel** as needed
 
 ### What happens when the timer ends
 
-- If pre-stop notification is enabled, an on-screen message appears (default: 30 seconds before stopping)
-- At zero, playback is stopped via the Jellyfin API
+1. If pre-stop notification is enabled, an on-screen toast appears (default: 30 seconds before zero)
+2. At zero, an **"Are you still watching?"** popup appears with a 60-second countdown
+3. **Continue Watching** -- dismisses the popup, cancels the timer, keeps playing
+4. **Stop Now** -- stops playback immediately
+5. **No response / dismiss** -- playback stops automatically after 60 seconds
+6. **Escape key** -- dismisses the popup without stopping (accidental press protection)
 
 ## Configuration Options
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Default Duration | 30 minutes | Default timer duration when using custom input |
-| Pre-Stop Notification | Enabled | Show an on-screen notification before stopping |
+| Default Duration | 30 minutes | Default timer duration |
+| Pre-Stop Notification | Enabled | Show an on-screen toast before the popup |
 | Notification Lead Time | 30 seconds | How far in advance to show the notification |
 
 ## API Endpoints
@@ -119,7 +134,7 @@ POST /SleepTimer/Start
 - The player button requires per-device installation (Jellyfin plugin framework limitation)
 - Currently English-only (no localization)
 - Volume fade is not yet implemented (planned for future release)
-- Episode-based stopping (may be added in the future)
+- Web client only -- does not work in native Jellyfin apps (Android TV, iOS, Roku, etc.)
 
 ## Tech Stack
 
@@ -138,8 +153,7 @@ This is an open project. Feel free to open issues, submit PRs, or suggest featur
 ## Potential Future Updates
 
 - Volume fade before stopping
-- Episode-based stopping (stop after N episodes)
-- Client app support (Android TV, iOS, etc.)
+- Client app support (Android TV, iOS, Roku, etc.)
 - Localization
 - Auto-install player button (if Jellyfin adds plugin injection support)
 - Per-user default timer profiles
