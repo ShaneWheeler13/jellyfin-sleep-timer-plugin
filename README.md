@@ -4,7 +4,7 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 
 ## Features
 
-- **Preset durations**: 15m, 30m, 45m, 1h, 1.5h, 2h -- no fiddling with custom inputs
+- **Preset durations**: 15m, 30m, 45m, 1h, 1.5h, 2h
 - **"Are you still watching?" popup**: When the timer hits zero, a centered dialog appears with a 60-second countdown. Playback only stops if you don't respond or click "Stop Now". Click "Continue Watching" to dismiss and keep playing.
 - **Pre-stop notification**: Optional on-screen toast before the popup appears (configurable lead time)
 - **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
@@ -132,8 +132,6 @@ POST /SleepTimer/Start
 ## Limitations
 
 - The player button requires per-device installation (Jellyfin plugin framework limitation)
-- Currently English-only (no localization)
-- Volume fade is not yet implemented (planned for future release)
 - Web client only -- does not work in native Jellyfin apps (Android TV, iOS, Roku, etc.)
 
 ## Tech Stack
@@ -149,11 +147,3 @@ MIT
 ## Contributing
 
 This is an open project. Feel free to open issues, submit PRs, or suggest features.
-
-## Potential Future Updates
-
-- Volume fade before stopping
-- Client app support (Android TV, iOS, Roku, etc.)
-- Localization
-- Auto-install player button (if Jellyfin adds plugin injection support)
-- Per-user default timer profiles
