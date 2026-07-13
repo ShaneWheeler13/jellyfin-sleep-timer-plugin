@@ -54,6 +54,10 @@
                         gap: 0.75rem;
                         margin-bottom: 0.5rem;
                     }
+                    /* Margin fallback for browsers without flexbox gap support */
+                    #SleepTimerConfigPage .sleepTimerBtnRow > button + button {
+                        margin-left: 0.75rem;
+                    }
                     #SleepTimerConfigPage .sleepTimerBtn {
                         padding: 0.6rem 1.2rem;
                         border-radius: 6px;
@@ -94,6 +98,10 @@
                         display: flex;
                         align-items: center;
                         gap: 0.6rem;
+                    }
+                    /* Margin fallback for checkbox without gap support */
+                    #SleepTimerConfigPage .sleepTimerCheckbox > input + span {
+                        margin-left: 0.6rem;
                     }
                     #SleepTimerConfigPage .sleepTimerInput {
                         background: #1a1a1a;
@@ -156,12 +164,28 @@
                     // --- API helpers ---
 
                     function getApiBase() {
-                        if (window.ApiClient) return window.ApiClient.serverAddress().replace(/\/+$/, '');
+                        // Try multiple sources for the API client
+                        var api = window.ApiClient;
+                        if (!api && window.Connections && window.Connections.currentApiClient) {
+                            api = window.Connections.currentApiClient();
+                        }
+                        if (api && api.serverAddress) {
+                            var addr = api.serverAddress();
+                            if (addr) return addr.replace(/\/+$/, '');
+                        }
+                        // Fallback: derive from current location
+                        if (window.location && window.location.origin) {
+                            return window.location.origin;
+                        }
                         return '';
                     }
 
                     function getAuthToken() {
-                        if (window.ApiClient) return window.ApiClient.accessToken();
+                        var api = window.ApiClient;
+                        if (!api && window.Connections && window.Connections.currentApiClient) {
+                            api = window.Connections.currentApiClient();
+                        }
+                        if (api && api.accessToken) return api.accessToken();
                         return '';
                     }
 
@@ -174,41 +198,59 @@
 
                     // --- Config load/save ---
 
-                    async function loadConfig() {
-                        try {
-                            var res = await fetch(getApiBase() + '/SleepTimer/Config', {
-                                headers: authHeaders()
-                            });
-                            if (res.ok) {
-                                var config = await res.json();
-                                document.getElementById('defaultDuration').value = config.DefaultDurationMinutes || 30;
-                                document.getElementById('showNotification').checked = config.ShowNotification !== false;
-                                document.getElementById('notifyLeadTime').value = config.NotificationLeadTimeSeconds || 30;
-                            }
-                        } catch (e) {
+                    function loadConfig() {
+                        fetch(getApiBase() + '/SleepTimer/Config', {
+                            headers: authHeaders()
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(config) {
+                            document.getElementById('defaultDuration').value = config.DefaultDurationMinutes || 30;
+                            document.getElementById('showNotification').checked = config.ShowNotification !== false;
+                            document.getElementById('notifyLeadTime').value = config.NotificationLeadTimeSeconds || 30;
+                        })
+                        .catch(function(e) {
                             console.error('[SleepTimer] Failed to load config:', e);
-                        }
+                        });
                     }
 
-                    async function saveConfig() {
-                        try {
-                            var res = await fetch(getApiBase() + '/SleepTimer/Config', {
-                                method: 'POST',
-                                headers: authHeaders(),
-                                body: JSON.stringify({
-                                    DefaultDurationMinutes: parseInt(document.getElementById('defaultDuration').value),
-                                    ShowNotification: document.getElementById('showNotification').checked,
-                                    NotificationLeadTimeSeconds: parseInt(document.getElementById('notifyLeadTime').value)
-                                })
-                            });
-                            if (res.ok) {
+                    function saveConfig() {
+                        fetch(getApiBase() + '/SleepTimer/Config', {
+                            method: 'POST',
+                            headers: authHeaders(),
+                            body: JSON.stringify({
+                                DefaultDurationMinutes: parseInt(document.getElementById('defaultDuration').value),
+                                ShowNotification: document.getElementById('showNotification').checked,
+                                NotificationLeadTimeSeconds: parseInt(document.getElementById('notifyLeadTime').value)
+                            })
+                        })
+                        .then(function(r) {
+                            if (r.ok) {
                                 alert('Configuration saved');
                             } else {
-                                alert('Failed to save: ' + res.status + ' ' + res.statusText);
+                                alert('Failed to save: ' + r.status + ' ' + r.statusText);
                             }
-                        } catch (e) {
+                        })
+                        .catch(function(e) {
                             alert('Error: ' + e.message);
+                        });
+                    }
+
+                    // --- Script injection helper (avoids eval/CSP issues) ---
+
+                    function injectScript(code) {
+                        var target = null;
+                        try {
+                            target = window.top;
+                        } catch (e) {
+                            target = window;
                         }
+                        // Remove previous inject script
+                        var old = target.document.getElementById('sleepTimerInjectScript');
+                        if (old) old.remove();
+                        var s = target.document.createElement('script');
+                        s.id = 'sleepTimerInjectScript';
+                        s.textContent = code;
+                        target.document.head.appendChild(s);
                     }
 
                     // --- Install / Uninstall ---
@@ -235,35 +277,18 @@
                         }
                     }
 
-                    document.getElementById('installBtn').addEventListener('click', function() {
-                        // Clear old install first, then fresh install
-                        clearInjection();
-                        fetch(getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js')
-                            .then(function(r) { return r.text(); })
-                            .then(function(code) {
-                                localStorage.setItem(CODE_KEY, code);
-                                localStorage.setItem(INJECT_KEY, 'true');
-                                try { window.top.eval(code); } catch (e) {
-                                    console.error('[SleepTimer] Injection error:', e);
-                                }
-                                updateInstallUI();
-                            })
-                            .catch(function(e) { alert('Failed to install: ' + e.message); });
-                    });
-
-                    document.getElementById('uninstallBtn').addEventListener('click', function() {
-                        clearInjection();
-                        updateInstallUI();
-                        notify('Sleep button uninstalled');
-                    });
-
                     function clearInjection() {
                         // Run cleanup if the inject script provided one
-                        if (window.__sleepTimerCleanup) {
-                            try { window.__sleepTimerCleanup(); } catch (e) {
+                        var target = window;
+                        try { target = window.top; } catch (e) { /* same-origin fallback */ }
+                        if (target.__sleepTimerCleanup) {
+                            try { target.__sleepTimerCleanup(); } catch (e) {
                                 console.error('[SleepTimer] Cleanup error:', e);
                             }
                         }
+                        // Remove the script tag
+                        var old = target.document.getElementById('sleepTimerInjectScript');
+                        if (old) old.remove();
                         localStorage.removeItem(CODE_KEY);
                         localStorage.removeItem(INJECT_KEY);
                     }
@@ -274,6 +299,44 @@
                         }
                     }
 
+                    // Wire up button listeners (use DOMContentLoaded fallback)
+                    function initButtons() {
+                        var installBtn = document.getElementById('installBtn');
+                        var uninstallBtn = document.getElementById('uninstallBtn');
+                        if (!installBtn) {
+                            // Page not ready yet, retry shortly
+                            setTimeout(initButtons, 100);
+                            return;
+                        }
+
+                        installBtn.addEventListener('click', function() {
+                            // Clear old install first, then fresh install
+                            clearInjection();
+                            var scriptUrl = getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js';
+                            fetch(scriptUrl)
+                                .then(function(r) {
+                                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                                    return r.text();
+                                })
+                                .then(function(code) {
+                                    localStorage.setItem(CODE_KEY, code);
+                                    localStorage.setItem(INJECT_KEY, 'true');
+                                    injectScript(code);
+                                    updateInstallUI();
+                                })
+                                .catch(function(e) {
+                                    console.error('[SleepTimer] Install failed:', e);
+                                    alert('Failed to install: ' + e.message);
+                                });
+                        });
+
+                        uninstallBtn.addEventListener('click', function() {
+                            clearInjection();
+                            updateInstallUI();
+                            notify('Sleep button uninstalled');
+                        });
+                    }
+
                     // --- Init ---
 
                     // Auto-load inject script if previously installed (runs on every page load)
@@ -281,13 +344,12 @@
                         if (localStorage.getItem(INJECT_KEY) === 'true') {
                             var code = localStorage.getItem(CODE_KEY);
                             if (code) {
-                                try { window.top.eval(code); } catch (e) {
-                                    console.error('[SleepTimer] Auto-load error:', e);
-                                }
+                                injectScript(code);
                             }
                         }
                     })();
 
+                    initButtons();
                     updateInstallUI();
                     loadConfig();
                 </script>

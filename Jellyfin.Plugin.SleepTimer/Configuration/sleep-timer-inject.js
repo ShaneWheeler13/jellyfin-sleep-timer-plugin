@@ -112,9 +112,9 @@
             '</div>',
 
             '<div id="stActiveControls" style="display:' + (activeTimer > 0 ? 'block' : 'none') + ';margin-bottom:12px;padding-top:12px;border-top:1px solid #333">',
-                '<div style="display:flex;gap:8px">',
-                    '<button id="stAdd15" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer">+15m</button>',
-                    '<button id="stAdd30" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer">+30m</button>',
+                '<div style="display:flex">',
+                    '<button id="stAdd15" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;margin-right:8px">+15m</button>',
+                    '<button id="stAdd30" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;margin-right:8px">+30m</button>',
                     '<button id="stCancel" style="flex:1;padding:8px;background:#d32f2f;color:#fff;border:none;border-radius:6px;cursor:pointer">Cancel</button>',
                 '</div>',
             '</div>'
@@ -157,12 +157,17 @@
     // Timer logic
     // ------------------------------------------------------------------
 
+    function pad2(n) {
+        n = String(n);
+        return n.length < 2 ? '0' + n : n;
+    }
+
     function formatTime(seconds) {
         var h = Math.floor(seconds / 3600);
         var m = Math.floor((seconds % 3600) / 60);
         var s = seconds % 60;
-        if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-        return m + ':' + String(s).padStart(2, '0');
+        if (h > 0) return h + ':' + pad2(m) + ':' + pad2(s);
+        return m + ':' + pad2(s);
     }
 
     function startDurationTimer(minutes) {
