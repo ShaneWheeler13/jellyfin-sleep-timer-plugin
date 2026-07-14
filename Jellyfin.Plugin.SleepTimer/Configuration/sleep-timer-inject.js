@@ -271,8 +271,6 @@
                     popupShown = true;
                     showStillWatchingPopup();
                 }
-            } else if (remaining <= 10000 && remaining > 9000) {
-                notify('Playback stopping in 10 seconds...');
             }
         }, 1000);
     }

@@ -8,12 +8,12 @@
         "category": "General",
         "versions": [
             {
-                "version": "1.2.1.0",
-                "changelog": "Fix: persistence via external script tag (CSP-safe). Remove DefaultDuration and NotificationLeadTime config options.",
+                "version": "1.2.2.0",
+                "changelog": "Remove pre-stop notification feature. The popup handles the stop decision.",
                 "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ShaneWheeler13/jellyfin-plugin-sleep-timer/releases/download/v1.2.1/jellyfin-plugin-sleep-timer-v1.2.1.zip",
-                "checksum": "4d14888d5a8343c74c0ebe80b2e0998c",
-                "timestamp": "2026-07-14T17:47:00Z"
+                "sourceUrl": "https://github.com/ShaneWheeler13/jellyfin-plugin-sleep-timer/releases/download/v1.2.2/jellyfin-plugin-sleep-timer-v1.2.2.zip",
+                "checksum": "f72c7880032a582dda2bbf8ab1dcfdcd",
+                "timestamp": "2026-07-14T18:21:00Z"
             }
         ]
     }

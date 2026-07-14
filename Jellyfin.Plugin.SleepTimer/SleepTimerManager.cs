@@ -42,14 +42,10 @@ public class SleepTimerManager : IDisposable
     /// <param name="sessionId">The Jellyfin session ID.</param>
     /// <param name="userId">The user ID.</param>
     /// <param name="durationMinutes">Timer duration in minutes.</param>
-    /// <param name="notifyBeforeStop">Whether to show a notification before stopping.</param>
-    /// <param name="notifyLeadTimeSeconds">Notification lead time in seconds.</param>
     public void StartTimer(
         string sessionId,
         Guid userId,
-        int durationMinutes,
-        bool notifyBeforeStop = true,
-        int notifyLeadTimeSeconds = 30)
+        int durationMinutes)
     {
         var endTime = DateTime.UtcNow.AddMinutes(durationMinutes);
         var timer = new SleepTimer
@@ -58,10 +54,7 @@ public class SleepTimerManager : IDisposable
             UserId = userId,
             StartTime = DateTime.UtcNow,
             EndTime = endTime,
-            DurationMinutes = durationMinutes,
-            NotifyBeforeStop = notifyBeforeStop,
-            NotifyLeadTimeSeconds = notifyLeadTimeSeconds,
-            NotificationSent = false
+            DurationMinutes = durationMinutes
         };
 
         _timers[sessionId] = timer;
@@ -124,38 +117,9 @@ public class SleepTimerManager : IDisposable
 
     private async Task MonitorTimerAsync(SleepTimer timer)
     {
-        var notifyTime = timer.EndTime.AddSeconds(-timer.NotifyLeadTimeSeconds);
-
         while (!timer.IsExpired && _timers.ContainsKey(timer.SessionId))
         {
             var now = DateTime.UtcNow;
-
-            // Send notification before stopping
-            if (timer.NotifyBeforeStop && !timer.NotificationSent && now >= notifyTime)
-            {
-                timer.NotificationSent = true;
-                try
-                {
-                    var command = new MessageCommand
-                    {
-                        Header = "Sleep Timer",
-                        Text = $"Playback will stop in {timer.NotifyLeadTimeSeconds} seconds.",
-                        TimeoutMs = 5000
-                    };
-
-                    await _sessionManager.SendMessageCommand(
-                        null,
-                        timer.SessionId,
-                        command,
-                        CancellationToken.None);
-
-                    _logger.LogInformation("Sleep timer notification sent for session {SessionId}", timer.SessionId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to send sleep timer notification");
-                }
-            }
 
             // Stop playback
             if (now >= timer.EndTime)

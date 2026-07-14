@@ -7,9 +7,4 @@ namespace Jellyfin.Plugin.SleepTimer;
 /// </summary>
 public class PluginConfiguration : MediaBrowser.Model.Plugins.BasePluginConfiguration
 {
-    /// <summary>
-    /// Gets or sets whether to show a notification before stopping.
-    /// </summary>
-    [XmlAttribute("ShowNotification")]
-    public bool ShowNotification { get; set; } = true;
 }

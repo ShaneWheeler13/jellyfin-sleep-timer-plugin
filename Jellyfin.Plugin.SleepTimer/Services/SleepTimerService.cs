@@ -30,11 +30,7 @@ public class SleepTimerService : ControllerBase
     [Route("Config")]
     public IActionResult GetConfig()
     {
-        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
-        return Ok(new
-        {
-            config.ShowNotification
-        });
+        return Ok(new { });
     }
 
     /// <summary>
@@ -50,9 +46,7 @@ public class SleepTimerService : ControllerBase
             return StatusCode(503, "Sleep Timer plugin not initialized");
         }
 
-        plugin.Configuration.ShowNotification = config.ShowNotification;
         plugin.SaveConfiguration();
-
         return Ok(new { message = "Configuration saved" });
     }
 
@@ -76,8 +70,7 @@ public class SleepTimerService : ControllerBase
             StartTime = t.StartTime.ToString("o"),
             EndTime = t.EndTime.ToString("o"),
             t.DurationMinutes,
-            RemainingSeconds = Math.Max(0, (int)t.Remaining.TotalSeconds),
-            t.NotifyBeforeStop
+            RemainingSeconds = Math.Max(0, (int)t.Remaining.TotalSeconds)
         });
 
         return Ok(timers);
@@ -110,8 +103,7 @@ public class SleepTimerService : ControllerBase
             StartTime = timer.StartTime.ToString("o"),
             EndTime = timer.EndTime.ToString("o"),
             timer.DurationMinutes,
-            RemainingSeconds = Math.Max(0, (int)timer.Remaining.TotalSeconds),
-            timer.NotifyBeforeStop
+            RemainingSeconds = Math.Max(0, (int)timer.Remaining.TotalSeconds)
         });
     }
 
@@ -128,8 +120,6 @@ public class SleepTimerService : ControllerBase
             return StatusCode(503, "Sleep Timer plugin not initialized");
         }
 
-        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
-
         // Find the session for the user
         var session = _sessionManager.Sessions
             .FirstOrDefault(s => s.UserId == request.UserId && s.NowPlayingItem != null);
@@ -141,10 +131,8 @@ public class SleepTimerService : ControllerBase
 
         var sessionId = request.SessionId ?? session?.Id ?? string.Empty;
         var duration = request.DurationMinutes > 0 ? request.DurationMinutes : 30;
-        var notify = request.NotifyBeforeStop ?? config.ShowNotification;
-        var notifyLead = 30;
 
-        manager.StartTimer(sessionId, request.UserId, duration, notify, notifyLead);
+        manager.StartTimer(sessionId, request.UserId, duration);
 
         return Ok(new
         {
@@ -223,11 +211,6 @@ public class StartTimerRequest
     /// Gets or sets the duration in minutes.
     /// </summary>
     public int DurationMinutes { get; set; }
-
-    /// <summary>
-    /// Gets or sets whether to show a notification before stopping.
-    /// </summary>
-    public bool? NotifyBeforeStop { get; set; }
 }
 
 /// <summary>

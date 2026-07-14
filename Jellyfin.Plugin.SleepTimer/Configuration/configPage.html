@@ -139,14 +139,6 @@
                         </p>
                     </div>
 
-                    <div class="sleepTimerSection">
-                        <label class="sleepTimerLabel">Pre-Stop Notification</label>
-                        <div class="sleepTimerCheckbox">
-                            <input type="checkbox" id="showNotification" checked />
-                            <span style="color:#ccc">Show a notification before playback stops</span>
-                        </div>
-                    </div>
-
                     <button class="sleepTimerBtn save" onclick="saveConfig()">Save</button>
                 </div>
 
@@ -194,7 +186,7 @@
                         })
                         .then(function(r) { return r.json(); })
                         .then(function(config) {
-                            document.getElementById('showNotification').checked = config.ShowNotification !== false;
+                            // No configurable options yet
                         })
                         .catch(function(e) {
                             console.error('[SleepTimer] Failed to load config:', e);
@@ -205,9 +197,7 @@
                         fetch(getApiBase() + '/SleepTimer/Config', {
                             method: 'POST',
                             headers: authHeaders(),
-                            body: JSON.stringify({
-                                ShowNotification: document.getElementById('showNotification').checked
-                            })
+                            body: JSON.stringify({})
                         })
                         .then(function(r) {
                             if (r.ok) {

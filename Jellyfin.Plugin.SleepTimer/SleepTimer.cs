@@ -31,21 +31,6 @@ public class SleepTimer
     public int DurationMinutes { get; set; }
 
     /// <summary>
-    /// Gets or sets whether to send a notification before stopping.
-    /// </summary>
-    public bool NotifyBeforeStop { get; set; }
-
-    /// <summary>
-    /// Gets or sets the notification lead time in seconds.
-    /// </summary>
-    public int NotifyLeadTimeSeconds { get; set; }
-
-    /// <summary>
-    /// Gets or sets whether the notification has been sent.
-    /// </summary>
-    public bool NotificationSent { get; set; }
-
-    /// <summary>
     /// Gets or sets whether the timer has expired.
     /// </summary>
     public bool IsExpired { get; set; }

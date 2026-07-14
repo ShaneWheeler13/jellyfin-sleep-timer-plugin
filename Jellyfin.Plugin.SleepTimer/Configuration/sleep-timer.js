@@ -6,14 +6,10 @@ async function loadConfig() {
         const apiClient = await getApiClient();
         if (!apiClient) return;
 
-        // Fetch config from plugin API
         const res = await fetch(apiClient.serverAddress + '/SleepTimer/Config', {
             headers: { 'X-Emby-Token': apiClient.accessToken() }
         });
-        if (res.ok) {
-            const config = await res.json();
-            document.getElementById('showNotification').checked = config.ShowNotification !== false;
-        }
+        // No configurable options yet
     } catch (e) {
         console.error('[SleepTimer] Failed to load config:', e);
     }
@@ -24,17 +20,13 @@ async function saveConfig() {
         const apiClient = await getApiClient();
         if (!apiClient) { alert('Not connected'); return; }
 
-        const config = {
-            ShowNotification: document.getElementById('showNotification').checked
-        };
-
         const res = await fetch(apiClient.serverAddress + '/SleepTimer/Config', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Emby-Token': apiClient.accessToken()
             },
-            body: JSON.stringify(config)
+            body: JSON.stringify({})
         });
 
         if (res.ok) {
