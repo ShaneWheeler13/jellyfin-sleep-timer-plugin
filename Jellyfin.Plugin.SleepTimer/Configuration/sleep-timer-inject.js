@@ -127,14 +127,18 @@
         var autoCloseTimer = null;
 
         function startAutoClose() {
-            // Only auto-close when no timer is running -- give the user
-            // time to use +15m / +30m / Cancel when a timer is active.
-            if (sleepTimerEnd) return;
             if (autoCloseTimer) clearTimeout(autoCloseTimer);
             autoCloseTimer = setTimeout(function() {
                 var p = document.getElementById('sleepTimerPanel');
                 if (p) p.remove();
             }, 4000);
+        }
+
+        function cancelAutoClose() {
+            if (autoCloseTimer) {
+                clearTimeout(autoCloseTimer);
+                autoCloseTimer = null;
+            }
         }
 
         var activeTimer = sleepTimerEnd ? Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000)) : 0;
@@ -187,13 +191,19 @@
         document.body.appendChild(panel);
 
         // Auto-close after 4 seconds of inactivity
+        // Use mousemove and click to reset the timer, so hovering over
+        // the panel keeps it alive. stopPropagation on button clicks prevents
+        // the panel click handler from double-firing.
         panel.addEventListener('click', startAutoClose);
+        panel.addEventListener('mousemove', startAutoClose);
         startAutoClose();
 
         // Preset duration buttons
         var presetBtns = panel.querySelectorAll('.stPreset');
         for (var i = 0; i < presetBtns.length; i++) {
-            presetBtns[i].addEventListener('click', function() {
+            presetBtns[i].addEventListener('click', function(e) {
+                e.stopPropagation();
+                cancelAutoClose();
                 if (autoCloseTimer) clearTimeout(autoCloseTimer);
                 startDurationTimer(parseInt(this.dataset.mins, 10));
                 panel.remove();
@@ -202,15 +212,23 @@
 
         // Active timer controls
         if (activeTimer > 0) {
-            document.getElementById('stAdd15').addEventListener('click', function() {
+            document.getElementById('stAdd15').addEventListener('click', function(e) {
+                e.stopPropagation();
+                cancelAutoClose();
                 sleepTimerEnd += 15 * 60 * 1000;
                 updateCountdown();
+                startAutoClose();
             });
-            document.getElementById('stAdd30').addEventListener('click', function() {
+            document.getElementById('stAdd30').addEventListener('click', function(e) {
+                e.stopPropagation();
+                cancelAutoClose();
                 sleepTimerEnd += 30 * 60 * 1000;
                 updateCountdown();
+                startAutoClose();
             });
-            document.getElementById('stCancel').addEventListener('click', function() {
+            document.getElementById('stCancel').addEventListener('click', function(e) {
+                e.stopPropagation();
+                cancelAutoClose();
                 cancelTimer();
                 panel.remove();
             });
