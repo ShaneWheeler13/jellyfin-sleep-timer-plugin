@@ -33,9 +33,7 @@ public class SleepTimerService : ControllerBase
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         return Ok(new
         {
-            config.DefaultDurationMinutes,
-            config.ShowNotification,
-            config.NotificationLeadTimeSeconds
+            config.ShowNotification
         });
     }
 
@@ -52,9 +50,7 @@ public class SleepTimerService : ControllerBase
             return StatusCode(503, "Sleep Timer plugin not initialized");
         }
 
-        plugin.Configuration.DefaultDurationMinutes = config.DefaultDurationMinutes;
         plugin.Configuration.ShowNotification = config.ShowNotification;
-        plugin.Configuration.NotificationLeadTimeSeconds = config.NotificationLeadTimeSeconds;
         plugin.SaveConfiguration();
 
         return Ok(new { message = "Configuration saved" });
@@ -144,9 +140,9 @@ public class SleepTimerService : ControllerBase
         }
 
         var sessionId = request.SessionId ?? session?.Id ?? string.Empty;
-        var duration = request.DurationMinutes > 0 ? request.DurationMinutes : config.DefaultDurationMinutes;
+        var duration = request.DurationMinutes > 0 ? request.DurationMinutes : 30;
         var notify = request.NotifyBeforeStop ?? config.ShowNotification;
-        var notifyLead = request.NotifyLeadTimeSeconds ?? config.NotificationLeadTimeSeconds;
+        var notifyLead = 30;
 
         manager.StartTimer(sessionId, request.UserId, duration, notify, notifyLead);
 
@@ -232,11 +228,6 @@ public class StartTimerRequest
     /// Gets or sets whether to show a notification before stopping.
     /// </summary>
     public bool? NotifyBeforeStop { get; set; }
-
-    /// <summary>
-    /// Gets or sets the notification lead time in seconds.
-    /// </summary>
-    public int? NotifyLeadTimeSeconds { get; set; }
 }
 
 /// <summary>

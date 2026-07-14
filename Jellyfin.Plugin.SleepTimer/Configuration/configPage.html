@@ -140,21 +140,11 @@
                     </div>
 
                     <div class="sleepTimerSection">
-                        <label class="sleepTimerLabel">Default Duration (minutes)</label>
-                        <input type="number" id="defaultDuration" min="1" max="600" value="30" class="sleepTimerInput" />
-                    </div>
-
-                    <div class="sleepTimerSection">
                         <label class="sleepTimerLabel">Pre-Stop Notification</label>
                         <div class="sleepTimerCheckbox">
                             <input type="checkbox" id="showNotification" checked />
                             <span style="color:#ccc">Show a notification before playback stops</span>
                         </div>
-                    </div>
-
-                    <div class="sleepTimerSection">
-                        <label class="sleepTimerLabel">Notification Lead Time (seconds)</label>
-                        <input type="number" id="notifyLeadTime" min="5" max="120" value="30" class="sleepTimerInput" />
                     </div>
 
                     <button class="sleepTimerBtn save" onclick="saveConfig()">Save</button>
@@ -204,9 +194,7 @@
                         })
                         .then(function(r) { return r.json(); })
                         .then(function(config) {
-                            document.getElementById('defaultDuration').value = config.DefaultDurationMinutes || 30;
                             document.getElementById('showNotification').checked = config.ShowNotification !== false;
-                            document.getElementById('notifyLeadTime').value = config.NotificationLeadTimeSeconds || 30;
                         })
                         .catch(function(e) {
                             console.error('[SleepTimer] Failed to load config:', e);
@@ -218,9 +206,7 @@
                             method: 'POST',
                             headers: authHeaders(),
                             body: JSON.stringify({
-                                DefaultDurationMinutes: parseInt(document.getElementById('defaultDuration').value),
-                                ShowNotification: document.getElementById('showNotification').checked,
-                                NotificationLeadTimeSeconds: parseInt(document.getElementById('notifyLeadTime').value)
+                                ShowNotification: document.getElementById('showNotification').checked
                             })
                         })
                         .then(function(r) {
@@ -237,7 +223,7 @@
 
                     // --- Script injection helper (avoids eval/CSP issues) ---
 
-                    function injectScript(code) {
+                    function injectScript() {
                         var target = null;
                         try {
                             target = window.top;
@@ -249,14 +235,15 @@
                         if (old) old.remove();
                         var s = target.document.createElement('script');
                         s.id = 'sleepTimerInjectScript';
-                        s.textContent = code;
+                        s.src = getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js';
+                        s.onload = function() { console.log('[SleepTimer] Inject script loaded'); };
+                        s.onerror = function() { console.error('[SleepTimer] Failed to load inject script'); };
                         target.document.head.appendChild(s);
                     }
 
                     // --- Install / Uninstall ---
 
                     var INJECT_KEY = 'sleeptimer_installed';
-                    var CODE_KEY = 'sleeptimer_code';
 
                     function updateInstallUI() {
                         var installed = localStorage.getItem(INJECT_KEY) === 'true';
@@ -289,7 +276,6 @@
                         // Remove the script tag
                         var old = target.document.getElementById('sleepTimerInjectScript');
                         if (old) old.remove();
-                        localStorage.removeItem(CODE_KEY);
                         localStorage.removeItem(INJECT_KEY);
                     }
 
@@ -312,22 +298,9 @@
                         installBtn.addEventListener('click', function() {
                             // Clear old install first, then fresh install
                             clearInjection();
-                            var scriptUrl = getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js';
-                            fetch(scriptUrl)
-                                .then(function(r) {
-                                    if (!r.ok) throw new Error('HTTP ' + r.status);
-                                    return r.text();
-                                })
-                                .then(function(code) {
-                                    localStorage.setItem(CODE_KEY, code);
-                                    localStorage.setItem(INJECT_KEY, 'true');
-                                    injectScript(code);
-                                    updateInstallUI();
-                                })
-                                .catch(function(e) {
-                                    console.error('[SleepTimer] Install failed:', e);
-                                    alert('Failed to install: ' + e.message);
-                                });
+                            localStorage.setItem(INJECT_KEY, 'true');
+                            injectScript();
+                            updateInstallUI();
                         });
 
                         uninstallBtn.addEventListener('click', function() {

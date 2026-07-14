@@ -71,6 +71,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 Name = "sleep-timer-inject.js",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.sleep-timer-inject.js"
+            },
+            new PluginPageInfo
+            {
+                Name = "sleeptimer-autoloader.js",
+                EmbeddedResourcePath = GetType().Namespace + ".Configuration.sleeptimer-autoloader.js"
             }
         };
     }

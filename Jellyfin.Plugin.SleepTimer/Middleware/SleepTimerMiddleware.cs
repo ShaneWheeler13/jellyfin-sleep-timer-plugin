@@ -16,32 +16,9 @@ public class SleepTimerMiddleware
     private readonly ILogger<SleepTimerMiddleware> _logger;
 
     // Inject before </body> in the main Jellyfin HTML
+    // Use <script src> instead of inline script to avoid CSP blocks
     private const string InjectScriptTag = """
-<script>
-// Sleep Timer auto-loader: checks if installed and loads the inject script
-(function() {
-    if (localStorage.getItem('sleeptimer_installed') !== 'true') return;
-    var code = localStorage.getItem('sleeptimer_code');
-    if (code) {
-        var s = document.createElement('script');
-        s.id = 'sleepTimerInjectScript';
-        s.textContent = code;
-        document.head.appendChild(s);
-    } else {
-        // No cached code -- fetch from server
-        fetch('/web/ConfigurationPage?name=sleep-timer-inject.js')
-            .then(function(r) { return r.text(); })
-            .then(function(code) {
-                localStorage.setItem('sleeptimer_code', code);
-                var s = document.createElement('script');
-                s.id = 'sleepTimerInjectScript';
-                s.textContent = code;
-                document.head.appendChild(s);
-            })
-            .catch(function(e) { console.error('[SleepTimer] Auto-load failed:', e); });
-    }
-})();
-</script>
+<script src="/web/ConfigurationPage?name=sleeptimer-autoloader.js"></script>
 </body>
 """;
 

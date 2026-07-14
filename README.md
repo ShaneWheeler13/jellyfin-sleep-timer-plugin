@@ -8,13 +8,13 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 - **OSD countdown display**: Live countdown next to the bedtime button in the player -- always visible while a timer is running
 - **One-click clear**: Clear button (X) next to the countdown stops the timer without navigating into the panel
 - **"Are you still watching?" popup**: When the timer hits zero, a centered dialog appears with a 60-second countdown. Playback only stops if you don't respond or click "Stop Now". Click "Continue Watching" to dismiss and keep playing.
-- **Pre-stop notification**: Optional on-screen toast before the popup appears (configurable lead time)
+- **Pre-stop notification**: Optional on-screen toast before the popup appears
 - **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
 - **Cancel anytime**: One-click cancel from the sleep timer panel or the OSD clear button
 - **Per-device install/uninstall**: Install and uninstall the player button directly from the plugin config page -- no manual localStorage hacking
 - **Server-side persistence**: The plugin injects an auto-loader into Jellyfin's web pages via middleware, so the sleep timer button survives server restarts automatically
 - **Cross-browser compatible**: Works on Chrome, Firefox, Safari, Edge, and older browsers (no `eval`, no `padStart`, no flexbox `gap` dependency)
-- **Dashboard config page**: Set default duration and notification preferences
+- **Dashboard config page**: Toggle pre-stop notification
 
 ## Compatibility
 
@@ -56,10 +56,7 @@ The built DLL will be at `bin/Release/net9.0/Jellyfin.Plugin.SleepTimer.dll`. Co
 After installing the plugin and restarting Jellyfin:
 
 1. Go to **Dashboard > Plugins > Sleep Timer**
-2. Configure your default settings:
-   - Default duration (minutes)
-   - Pre-stop notification (on/off)
-   - Notification lead time (seconds)
+2. Toggle the pre-stop notification on/off
 3. Click **Save**
 
 ### Per-device player button
@@ -102,7 +99,7 @@ No server restart needed -- install and uninstall take effect instantly.
 
 ### What happens when the timer ends
 
-1. If pre-stop notification is enabled, an on-screen toast appears (default: 30 seconds before zero)
+1. If pre-stop notification is enabled, an on-screen toast appears 30 seconds before zero
 2. At zero, an **"Are you still watching?"** popup appears with a 60-second countdown
 3. **Continue Watching** -- dismisses the popup, cancels the timer, keeps playing
 4. **Stop Now** -- stops playback immediately
@@ -113,9 +110,7 @@ No server restart needed -- install and uninstall take effect instantly.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Default Duration | 30 minutes | Default timer duration |
 | Pre-Stop Notification | Enabled | Show an on-screen toast before the popup |
-| Notification Lead Time | 30 seconds | How far in advance to show the notification |
 
 ## API Endpoints
 
@@ -138,8 +133,7 @@ POST /SleepTimer/Start
 {
     "UserId": "b776d728-908e-4837-9bc7-56041eabf40a",
     "DurationMinutes": 30,
-    "NotifyBeforeStop": true,
-    "NotifyLeadTimeSeconds": 30
+    "NotifyBeforeStop": true
 }
 ```
 
