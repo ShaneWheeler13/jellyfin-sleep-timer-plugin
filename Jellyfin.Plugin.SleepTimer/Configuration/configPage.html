@@ -339,15 +339,10 @@
 
                     // --- Init ---
 
-                    // Auto-load inject script if previously installed (runs on every page load)
-                    (function autoLoad() {
-                        if (localStorage.getItem(INJECT_KEY) === 'true') {
-                            var code = localStorage.getItem(CODE_KEY);
-                            if (code) {
-                                injectScript(code);
-                            }
-                        }
-                    })();
+                    // Note: Auto-loading on every page is now handled by server-side middleware.
+                    // The middleware injects an auto-loader script into Jellyfin's main HTML that
+                    // checks localStorage and loads the inject script if installed.
+                    // This persists across server restarts.
 
                     initButtons();
                     updateInstallUI();

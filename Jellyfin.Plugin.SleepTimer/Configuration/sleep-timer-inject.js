@@ -29,26 +29,87 @@
         return btn;
     }
 
+    function createOsdCountdown() {
+        // Wrapper containing the countdown text and a clear button
+        var wrapper = document.createElement('div');
+        wrapper.className = 'sleepTimerOsdCountdown';
+        wrapper.style.cssText = [
+            'display:none',
+            'align-items:center',
+            'margin-left:4px'
+        ].join(';');
+
+        var countdown = document.createElement('span');
+        countdown.id = 'sleepTimerOsdCountdown';
+        countdown.style.cssText = [
+            'font-size:0.9rem',
+            'color:#0084ff',
+            'font-weight:600',
+            'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+            'min-width:42px',
+            'text-align:center',
+            'padding:0 6px',
+            'cursor:default'
+        ].join(';');
+
+        var clearBtn = document.createElement('button');
+        clearBtn.setAttribute('is', 'paper-icon-button-light');
+        clearBtn.className = 'sleepTimerClearBtn autoSize';
+        clearBtn.title = 'Clear sleep timer';
+        clearBtn.style.cssText = 'opacity:0.7';
+        clearBtn.innerHTML = '<span class="xlargePaperIconButton material-icons" aria-hidden="true" style="font-size:1.2em">close</span>';
+        clearBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            cancelTimer();
+            notify('Sleep timer cleared');
+        });
+
+        wrapper.appendChild(countdown);
+        wrapper.appendChild(clearBtn);
+        return wrapper;
+    }
+
     function injectButton() {
         var osd = document.querySelector('.videoOsdBottom');
         if (!osd) return false;
         if (osd.querySelector('.btnSleepTimer')) return true;
 
+        var sleepBtn = createSleepTimerButton();
+        var osdCountdown = createOsdCountdown();
+
         // Insert after the subtitles button
         var subtitleBtn = osd.querySelector('.btnSubtitles');
         if (subtitleBtn && subtitleBtn.parentNode) {
-            subtitleBtn.parentNode.insertBefore(createSleepTimerButton(), subtitleBtn.nextSibling);
-            return true;
+            subtitleBtn.parentNode.insertBefore(sleepBtn, subtitleBtn.nextSibling);
+            subtitleBtn.parentNode.insertBefore(osdCountdown, sleepBtn.nextSibling);
+        } else {
+            // Fallback: append to the buttons row
+            var buttonsRow = osd.querySelector('.osdButtons');
+            if (buttonsRow) {
+                buttonsRow.appendChild(sleepBtn);
+                buttonsRow.appendChild(osdCountdown);
+            } else {
+                return false;
+            }
         }
 
-        // Fallback: append to the buttons row
-        var buttonsRow = osd.querySelector('.osdButtons');
-        if (buttonsRow) {
-            buttonsRow.appendChild(createSleepTimerButton());
-            return true;
+        // If a timer is already running, show the countdown immediately
+        if (sleepTimerEnd) {
+            updateOsdCountdown(Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000)));
         }
 
-        return false;
+        return true;
+    }
+
+    function updateOsdCountdown(remaining) {
+        var el = document.getElementById('sleepTimerOsdCountdown');
+        if (el) {
+            el.textContent = remaining > 0 ? formatTime(remaining) : '';
+        }
+        var wrapper = document.querySelector('.sleepTimerOsdCountdown');
+        if (wrapper) {
+            wrapper.style.display = remaining > 0 ? 'flex' : 'none';
+        }
     }
 
     // ------------------------------------------------------------------
@@ -196,11 +257,13 @@
     }
 
     function updateCountdown() {
-        var countdown = document.getElementById('sleepTimerCountdown');
-        if (countdown && sleepTimerEnd) {
-            var remaining = Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000));
-            countdown.textContent = formatTime(remaining);
-        }
+        if (!sleepTimerEnd) return;
+        var remaining = Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000));
+        // Update panel countdown
+        var panelCountdown = document.getElementById('sleepTimerCountdown');
+        if (panelCountdown) panelCountdown.textContent = formatTime(remaining);
+        // Update OSD countdown
+        updateOsdCountdown(remaining);
     }
 
     function cancelTimer() {
@@ -210,6 +273,9 @@
         }
         sleepTimerEnd = null;
         popupShown = false;
+        // Clear OSD countdown
+        updateOsdCountdown(0);
+        // Clear panel countdown
         var countdown = document.getElementById('sleepTimerCountdown');
         if (countdown) countdown.textContent = '';
         var activeControls = document.getElementById('stActiveControls');
@@ -437,6 +503,9 @@
 
         var oldBtn = document.querySelector('.btnSleepTimer');
         if (oldBtn) oldBtn.remove();
+
+        var oldCountdown = document.querySelector('.sleepTimerOsdCountdown');
+        if (oldCountdown) oldCountdown.remove();
 
         var oldPanel = document.getElementById('sleepTimerPanel');
         if (oldPanel) oldPanel.remove();
