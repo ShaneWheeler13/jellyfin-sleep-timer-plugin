@@ -31,6 +31,7 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 2. Extract the DLL into your Jellyfin plugins directory:
    - **Linux**: `/config/plugins/SleepTimer/`
    - **Docker**: Mount the plugin directory and place the DLL inside
+   - **Windows**: `C:\ProgramData\Jellyfin\plugins\SleepTimer\`
 3. Restart Jellyfin
 4. Go to **Dashboard > Plugins > Sleep Timer** to configure
 
