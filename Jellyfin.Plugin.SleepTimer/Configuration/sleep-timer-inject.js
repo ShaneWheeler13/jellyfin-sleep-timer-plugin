@@ -127,6 +127,9 @@
         var autoCloseTimer = null;
 
         function startAutoClose() {
+            // Only auto-close when no timer is running -- give the user
+            // time to use +15m / +30m / Cancel when a timer is active.
+            if (sleepTimerEnd) return;
             if (autoCloseTimer) clearTimeout(autoCloseTimer);
             autoCloseTimer = setTimeout(function() {
                 var p = document.getElementById('sleepTimerPanel');
