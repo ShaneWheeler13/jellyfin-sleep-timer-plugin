@@ -5,11 +5,15 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 ## Features
 
 - **Preset durations**: 15m, 30m, 45m, 1h, 1.5h, 2h
+- **OSD countdown display**: Live countdown next to the bedtime button in the player -- always visible while a timer is running
+- **One-click clear**: Clear button (X) next to the countdown stops the timer without navigating into the panel
 - **"Are you still watching?" popup**: When the timer hits zero, a centered dialog appears with a 60-second countdown. Playback only stops if you don't respond or click "Stop Now". Click "Continue Watching" to dismiss and keep playing.
 - **Pre-stop notification**: Optional on-screen toast before the popup appears (configurable lead time)
 - **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
-- **Cancel anytime**: One-click cancel from the sleep timer panel
+- **Cancel anytime**: One-click cancel from the sleep timer panel or the OSD clear button
 - **Per-device install/uninstall**: Install and uninstall the player button directly from the plugin config page -- no manual localStorage hacking
+- **Server-side persistence**: The plugin injects an auto-loader into Jellyfin's web pages via middleware, so the sleep timer button survives server restarts automatically
+- **Cross-browser compatible**: Works on Chrome, Firefox, Safari, Edge, and older browsers (no `eval`, no `padStart`, no flexbox `gap` dependency)
 - **Dashboard config page**: Set default duration and notification preferences
 
 ## Compatibility
@@ -17,6 +21,7 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 - **Jellyfin 10.11+** (targets `net9.0`, ABI `10.11.0.0`)
 - Works with the Jellyfin web client
 - Player button requires per-device installation (see below)
+- Tested on Chrome, Firefox, Safari, and Edge
 
 ## Installation
 
@@ -65,6 +70,8 @@ The sleep timer button isn't automatically added to the web player. Jellyfin's p
 3. The moon icon (bedtime) will appear in the video player OSD next to the subtitle button
 4. Repeat on each device you want the button on
 
+Once installed, the button persists across server restarts and page reloads via server-side middleware injection. No need to reinstall after updates.
+
 ### Uninstalling the player button
 
 To remove the sleep timer button from a device:
@@ -84,7 +91,13 @@ No server restart needed -- install and uninstall take effect instantly.
 2. Click the moon icon in the player controls
 3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h)
 4. The panel auto-closes after 4 seconds of inactivity
-5. A countdown displays in the panel header. Use **+15m**, **+30m**, or **Cancel** as needed
+5. A countdown displays in the panel header and in the OSD next to the bedtime button
+
+### Monitoring the timer
+
+- **OSD countdown**: Shows remaining time next to the bedtime button (e.g. "29:42"). Visible whenever the player OSD is visible and a timer is active.
+- **Clear button (X)**: Click the X next to the countdown to clear the timer immediately. The sleep timer will not reactivate until you set a new duration.
+- **Panel**: Click the moon icon again to open the panel. Use **+15m**, **+30m**, or **Cancel** as needed.
 
 ### What happens when the timer ends
 
@@ -128,6 +141,25 @@ POST /SleepTimer/Start
     "NotifyLeadTimeSeconds": 30
 }
 ```
+
+## How It Works
+
+### Architecture
+
+- **Backend**: C# / .NET 9 plugin with ASP.NET Core API controllers for config and timer management
+- **Frontend**: Vanilla JavaScript injected into the Jellyfin web player via DOM manipulation
+- **Persistence**: Server-side middleware intercepts HTML responses and injects an auto-loader script that checks `localStorage` and re-injects the sleep timer script on every page load
+
+### Script Injection (not eval)
+
+The plugin uses DOM-based script-tag injection (`createElement('script')` + `appendChild`) instead of `eval()` to load the sleep timer script into the main Jellyfin window. This avoids CSP `unsafe-eval` restrictions and cross-origin iframe issues.
+
+### Browser Compatibility
+
+- No `eval()` or `new Function()` -- uses script-tag injection
+- No `String.padStart()` -- uses a `pad2()` helper
+- No flexbox `gap` -- uses explicit margins
+- Traditional `fetch().then()` chains and `var` declarations throughout
 
 ## Limitations
 
