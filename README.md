@@ -11,9 +11,9 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 - **Pre-stop notification**: Optional on-screen toast before the popup appears
 - **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
 - **Cancel anytime**: One-click cancel from the sleep timer panel or the OSD clear button
-- **Per-device install/uninstall**: Install and uninstall the player button directly from the plugin config page -- no manual localStorage hacking
-- **Server-side persistence**: The plugin injects an auto-loader into Jellyfin's web pages via middleware, so the sleep timer button survives server restarts automatically
-- **Cross-browser compatible**: Works on Chrome, Firefox, Safari, Edge, and older browsers (no `eval`, no `padStart`, no flexbox `gap` dependency)
+- **Per-device install/uninstall**: Install and uninstall the player button directly from the plugin config page
+- **Server-side persistence**: The sleep timer button survives server restarts and page reloads automatically via middleware injection
+- **Cross-browser compatible**: Works on Chrome, Firefox, Safari, and Edge
 - **Dashboard config page**: Toggle pre-stop notification
 
 ## Compatibility
@@ -76,14 +76,14 @@ After installing the plugin and restarting Jellyfin:
 
 ### Per-device player button
 
-The sleep timer button isn't automatically added to the web player. Jellyfin's plugin system doesn't support injecting into the player UI natively, so each device needs a one-time install:
+The sleep timer button isn't automatically added to the web player. Each device needs a one-time install:
 
 1. On the device you watch Jellyfin on, go to **Dashboard > Plugins > Sleep Timer**
 2. Click **"Install sleep button"**
 3. The moon icon (bedtime) will appear in the video player OSD next to the subtitle button
 4. Repeat on each device you want the button on
 
-Once installed, the button persists across server restarts and page reloads via server-side middleware injection. No need to reinstall after updates.
+Once installed, the button persists across server restarts and page reloads. No need to reinstall after updates.
 
 ### Uninstalling the player button
 
@@ -92,9 +92,7 @@ To remove the sleep timer button from a device:
 1. Go to **Dashboard > Plugins > Sleep Timer** on that device
 2. Click **"Uninstall"** (next to the Install button)
 3. The button, panel, and any active popup are immediately removed
-4. The script is cleared from the browser's `localStorage`
-
-No server restart needed -- install and uninstall take effect instantly.
+4. Done -- no server restart needed
 
 ## Usage
 
@@ -161,7 +159,6 @@ POST /SleepTimer/Start
 
 - **Backend**: C# / .NET 9, Jellyfin Plugin SDK 10.11
 - **Frontend**: Vanilla JavaScript, embedded in DLL as resources
-- **Build**: `dotnet build` with standard MSBuild
 
 ## License
 
