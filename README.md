@@ -143,25 +143,6 @@ POST /SleepTimer/Start
 }
 ```
 
-## How It Works
-
-### Architecture
-
-- **Backend**: C# / .NET 9 plugin with ASP.NET Core API controllers for config and timer management
-- **Frontend**: Vanilla JavaScript injected into the Jellyfin web player via DOM manipulation
-- **Persistence**: Server-side middleware intercepts HTML responses and injects an auto-loader script that checks `localStorage` and re-injects the sleep timer script on every page load
-
-### Script Injection (not eval)
-
-The plugin uses DOM-based script-tag injection (`createElement('script')` + `appendChild`) instead of `eval()` to load the sleep timer script into the main Jellyfin window. This avoids CSP `unsafe-eval` restrictions and cross-origin iframe issues.
-
-### Browser Compatibility
-
-- No `eval()` or `new Function()` -- uses script-tag injection
-- No `String.padStart()` -- uses a `pad2()` helper
-- No flexbox `gap` -- uses explicit margins
-- Traditional `fetch().then()` chains and `var` declarations throughout
-
 ## Limitations
 
 - The player button requires per-device installation (Jellyfin plugin framework limitation)
