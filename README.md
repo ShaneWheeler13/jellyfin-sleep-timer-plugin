@@ -35,6 +35,21 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 3. Restart Jellyfin
 4. Go to **Dashboard > Plugins > Sleep Timer** to configure
 
+### Auto-Update via Plugin Repository
+
+Add this repository URL to Jellyfin for automatic updates:
+
+```
+https://raw.githubusercontent.com/ShaneWheeler13/jellyfin-plugin-sleep-timer/main/manifest.json
+```
+
+1. Go to **Dashboard > Plugins > Repositories**
+2. Click the **+** button
+3. Paste the URL above
+4. Click **Save**
+5. The Sleep Timer plugin will appear under **Dashboard > Plugins > Catalog**
+6. Install from there and enable auto-update
+
 ### Building from Source
 
 Requirements:

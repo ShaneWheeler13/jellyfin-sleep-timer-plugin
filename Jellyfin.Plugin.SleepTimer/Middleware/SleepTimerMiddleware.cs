@@ -42,11 +42,8 @@ public class SleepTimerMiddleware
         // Only intercept GET requests to the main web page
         var path = context.Request.Path.Value ?? string.Empty;
         var isWebRoot = path == "/" || path == "/web" || path == "/web/" || path == "/index.html";
-        var isWebHtml = path.StartsWith("/web/", System.StringComparison.OrdinalIgnoreCase) &&
-                        (path.EndsWith(".html", System.StringComparison.OrdinalIgnoreCase) ||
-                         !Path.HasExtension(path));
 
-        if (!isWebRoot && !isWebHtml)
+        if (!isWebRoot)
         {
             await _next(context);
             return;

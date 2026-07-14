@@ -1,0 +1,20 @@
+[
+    {
+        "guid": "a3f1c7d2-8e4b-4f6a-9c1d-2b5e8a7f3d60",
+        "name": "Sleep Timer",
+        "description": "Automatically stop playback after a user-defined duration. Features preset timers (15m-2h), an 'Are you still watching?' popup before stopping, and per-device install/uninstall from the dashboard.",
+        "overview": "Sleep timer for Jellyfin playback",
+        "owner": "Shane",
+        "category": "General",
+        "versions": [
+            {
+                "version": "1.2.1.0",
+                "changelog": "Fix: persistence via external script tag (CSP-safe). Remove DefaultDuration and NotificationLeadTime config options.",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/ShaneWheeler13/jellyfin-plugin-sleep-timer/releases/download/v1.2.1/jellyfin-plugin-sleep-timer-v1.2.1.zip",
+                "checksum": "ebadfb8325333f66594175686731651e",
+                "timestamp": "2026-07-14T17:47:00Z"
+            }
+        ]
+    }
+]
