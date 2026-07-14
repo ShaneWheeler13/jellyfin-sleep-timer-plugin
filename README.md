@@ -96,28 +96,19 @@ To remove the sleep timer button from a device:
 
 ## Usage
 
-### Setting a timer
-
 1. Play any video
 2. Click the moon icon in the player controls
 3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h)
-4. The panel auto-closes after 4 seconds of inactivity
-5. A countdown displays in the panel header and in the OSD next to the bedtime button
+4. A countdown appears in the OSD next to the bedtime button
+5. Click the moon icon again to reopen the panel and use **+15m**, **+30m**, or **Cancel**
+6. Click the **X** next to the countdown to clear the timer without opening the panel
 
-### Monitoring the timer
+When the timer reaches zero, an **"Are you still watching?"** popup appears with a 60-second countdown:
 
-- **OSD countdown**: Shows remaining time next to the bedtime button (e.g. "29:42"). Visible whenever the player OSD is visible and a timer is active.
-- **Clear button (X)**: Click the X next to the countdown to clear the timer immediately. The sleep timer will not reactivate until you set a new duration.
-- **Panel**: Click the moon icon again to open the panel. Use **+15m**, **+30m**, or **Cancel** as needed.
-
-### What happens when the timer ends
-
-1. If pre-stop notification is enabled, an on-screen toast appears 30 seconds before zero
-2. At zero, an **"Are you still watching?"** popup appears with a 60-second countdown
-3. **Continue Watching** -- dismisses the popup, cancels the timer, keeps playing
-4. **Stop Now** -- stops playback immediately
-5. **No response / dismiss** -- playback stops automatically after 60 seconds
-6. **Escape key** -- dismisses the popup without stopping (accidental press protection)
+- **Continue Watching** -- dismisses the popup, keeps playing
+- **Stop Now** -- stops playback immediately
+- **No response** -- playback stops after 60 seconds
+- **Escape** -- dismisses without stopping (accidental press protection)
 
 ## Configuration Options
 
