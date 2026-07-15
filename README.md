@@ -41,7 +41,7 @@ https://raw.githubusercontent.com/ShaneWheeler13/jellyfin-plugin-sleep-timer/mai
 
 ### From Release
 
-1. Download the latest release ZIP from the [Releases page](../../releases)
+1. Download the latest release ZIP from the [Releases page](https://github.com/ShaneWheeler13/jellyfin-plugin-sleep-timer/releases)
 2. Extract the DLL into your Jellyfin plugins directory:
    - **Linux**: `/config/plugins/SleepTimer/`
    - **Docker**: Mount the plugin directory and place the DLL inside
