@@ -6,6 +6,9 @@
 *.deps.json
 *.xml
 
+# Release artifacts (use GitHub Releases, not committed binaries)
+releases/
+
 # IDE
 .vs/
 .vscode/

@@ -7,6 +7,10 @@ namespace Jellyfin.Plugin.SleepTimer;
 
 /// <summary>
 /// Manages sleep timers for playback sessions.
+/// The server acts as the source of truth for timer state. The client
+/// calls the API to start/extend/cancel and to report popup responses.
+/// The server monitoring loop acts as a fallback: if the client never
+/// responds to the popup, the server stops playback after the grace period.
 /// </summary>
 public class SleepTimerManager : IDisposable
 {
@@ -14,7 +18,19 @@ public class SleepTimerManager : IDisposable
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, SleepTimer> _timers = new();
     private readonly Timer _cleanupTimer;
+    private readonly Timer _monitorTimer;
     private bool _disposed;
+
+    /// <summary>
+    /// Popup grace period in seconds. The client has this long to respond
+    /// to the "Are you still watching?" popup before the server hard-stops.
+    /// </summary>
+    private const int PopupGracePeriodSeconds = 60;
+
+    /// <summary>
+    /// Monitor polling interval in milliseconds.
+    /// </summary>
+    private const int MonitorIntervalMs = 1000;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SleepTimerManager"/> class.
@@ -24,6 +40,8 @@ public class SleepTimerManager : IDisposable
         _sessionManager = sessionManager;
         _logger = logger;
         _cleanupTimer = new Timer(CleanupExpiredTimers, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+        // Single monitor timer checks all active timers — no per-timer polling loops
+        _monitorTimer = new Timer(MonitorAllTimers, null, TimeSpan.FromMilliseconds(MonitorIntervalMs), TimeSpan.FromMilliseconds(MonitorIntervalMs));
     }
 
     /// <summary>
@@ -47,6 +65,13 @@ public class SleepTimerManager : IDisposable
         Guid userId,
         int durationMinutes)
     {
+        // Validate duration
+        if (durationMinutes <= 0)
+        {
+            _logger.LogWarning("Rejecting sleep timer with invalid duration: {Minutes} minutes", durationMinutes);
+            return;
+        }
+
         var endTime = DateTime.UtcNow.AddMinutes(durationMinutes);
         var timer = new SleepTimer
         {
@@ -54,7 +79,8 @@ public class SleepTimerManager : IDisposable
             UserId = userId,
             StartTime = DateTime.UtcNow,
             EndTime = endTime,
-            DurationMinutes = durationMinutes
+            DurationMinutes = durationMinutes,
+            State = SleepTimerState.Running
         };
 
         _timers[sessionId] = timer;
@@ -63,9 +89,6 @@ public class SleepTimerManager : IDisposable
             sessionId, durationMinutes, endTime);
 
         TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
-
-        // Start the monitoring timer
-        _ = MonitorTimerAsync(timer);
     }
 
     /// <summary>
@@ -76,6 +99,7 @@ public class SleepTimerManager : IDisposable
     {
         if (_timers.TryRemove(sessionId, out var timer))
         {
+            timer.State = SleepTimerState.Cancelled;
             _logger.LogInformation("Sleep timer cancelled for session {SessionId}", sessionId);
             TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
         }
@@ -106,32 +130,99 @@ public class SleepTimerManager : IDisposable
     /// <param name="additionalMinutes">Minutes to add.</param>
     public void ExtendTimer(string sessionId, int additionalMinutes)
     {
+        if (additionalMinutes <= 0)
+        {
+            _logger.LogWarning("Rejecting extend with invalid duration: {Minutes} minutes", additionalMinutes);
+            return;
+        }
+
         if (_timers.TryGetValue(sessionId, out var timer))
         {
             timer.EndTime = timer.EndTime.AddMinutes(additionalMinutes);
+            // If the timer was in popup-pending state, go back to running
+            if (timer.State == SleepTimerState.PopupPending)
+            {
+                timer.State = SleepTimerState.Running;
+                timer.PopupDeadline = null;
+            }
+
             _logger.LogInformation("Sleep timer extended for session {SessionId}: +{Minutes} minutes (new end: {EndTime:HH:mm:ss} UTC)",
                 sessionId, additionalMinutes, timer.EndTime);
             TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
         }
     }
 
-    private async Task MonitorTimerAsync(SleepTimer timer)
+    /// <summary>
+    /// Handle the client's response to the "Are you still watching?" popup.
+    /// </summary>
+    /// <param name="sessionId">The session ID.</param>
+    /// <param name="action">The user's action: "continue" or "stop".</param>
+    public void HandlePopupResponse(string sessionId, string action)
     {
-        while (!timer.IsExpired && _timers.ContainsKey(timer.SessionId))
+        if (!_timers.TryGetValue(sessionId, out var timer))
         {
-            var now = DateTime.UtcNow;
+            _logger.LogWarning("Popup response for unknown session {SessionId}", sessionId);
+            return;
+        }
 
-            // Stop playback
-            if (now >= timer.EndTime)
+        if (action == "stop")
+        {
+            _logger.LogInformation("User chose to stop playback for session {SessionId}", sessionId);
+            _ = StopPlaybackAsync(timer);
+        }
+        else if (action == "continue")
+        {
+            _logger.LogInformation("User chose to continue watching for session {SessionId}", sessionId);
+            // Cancel the timer — user is still awake
+            CancelTimer(sessionId);
+        }
+        else
+        {
+            _logger.LogWarning("Unknown popup action '{Action}' for session {SessionId}", action, sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Single monitor callback that checks all timers.
+    /// Replaces the old per-timer polling loop.
+    /// </summary>
+    private void MonitorAllTimers(object? state)
+    {
+        if (_disposed) return;
+
+        var now = DateTime.UtcNow;
+
+        foreach (var kvp in _timers)
+        {
+            var timer = kvp.Value;
+
+            // Skip already-expired or cancelled timers
+            if (timer.State == SleepTimerState.Stopped ||
+                timer.State == SleepTimerState.Cancelled)
             {
-                timer.IsExpired = true;
-                await StopPlaybackAsync(timer);
-                _timers.TryRemove(timer.SessionId, out _);
-                TimerExpired?.Invoke(this, new SleepTimerEventArgs(timer));
-                break;
+                continue;
             }
 
-            await Task.Delay(1000);
+            // Timer is running and has reached zero → transition to popup-pending
+            if (timer.State == SleepTimerState.Running && now >= timer.EndTime)
+            {
+                timer.State = SleepTimerState.PopupPending;
+                timer.PopupDeadline = now.AddSeconds(PopupGracePeriodSeconds);
+                _logger.LogInformation("Sleep timer expired for session {SessionId} — popup pending (grace period: {Seconds}s)",
+                    timer.SessionId, PopupGracePeriodSeconds);
+                TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
+            }
+
+            // Popup grace period has expired → hard stop playback
+            if (timer.State == SleepTimerState.PopupPending &&
+                timer.PopupDeadline.HasValue && now >= timer.PopupDeadline.Value)
+            {
+                timer.State = SleepTimerState.Stopped;
+                timer.IsExpired = true;
+                _ = StopPlaybackAsync(timer);
+                _timers.TryRemove(timer.SessionId, out _);
+                TimerExpired?.Invoke(this, new SleepTimerEventArgs(timer));
+            }
         }
     }
 
@@ -139,7 +230,6 @@ public class SleepTimerManager : IDisposable
     {
         try
         {
-            // Send a Stop playstate command
             var stopRequest = new PlaystateRequest
             {
                 Command = PlaystateCommand.Stop
@@ -164,7 +254,9 @@ public class SleepTimerManager : IDisposable
         var now = DateTime.UtcNow;
         foreach (var kvp in _timers)
         {
-            if (now > kvp.Value.EndTime.AddMinutes(5))
+            // Remove timers that have been stopped or cancelled for more than 5 minutes
+            if ((kvp.Value.State == SleepTimerState.Stopped || kvp.Value.State == SleepTimerState.Cancelled) &&
+                now > kvp.Value.EndTime.AddMinutes(5))
             {
                 _timers.TryRemove(kvp.Key, out _);
             }
@@ -178,6 +270,7 @@ public class SleepTimerManager : IDisposable
             return;
 
         _cleanupTimer.Dispose();
+        _monitorTimer.Dispose();
         _disposed = true;
     }
 }

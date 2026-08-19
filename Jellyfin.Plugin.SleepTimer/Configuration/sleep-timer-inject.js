@@ -1,7 +1,9 @@
 // Jellyfin Sleep Timer - Client-side injection script
-// Adds a sleep timer button to the video player OSD and a settings panel
-// When timer reaches zero, shows "Are you still watching?" dialog instead of stopping immediately.
-// Playback only stops if the dialog is dismissed or ignored.
+// Adds a sleep timer button to the video player OSD and a settings panel.
+// When timer reaches zero, shows "Are you still watching?" dialog.
+// The server is the source of truth for timer state — the client calls
+// the API for every action (start/extend/cancel/popup response) and
+// syncs with the server on load in case the page was refreshed.
 
 (function() {
     'use strict';
@@ -9,11 +11,121 @@
     // Clean up any previous instance
     if (window.__sleepTimerCleanup) { window.__sleepTimerCleanup(); }
 
-    var PLUGIN_ID = 'a3f1c7d2-8e4b-4f6a-9c1d-2b5e8a7f3d60';
     var sleepTimerInterval = null;
-    var sleepTimerEnd = null;
+    var sleepTimerEnd = null;       // epoch ms, synced from server
+    var currentSessionId = null;    // session ID from server
     var popupShown = false;
-    var popupTimeoutMs = 60000; // 60 seconds to respond before auto-stop
+    var popupTimeoutMs = 60000;     // 60 seconds to respond before auto-stop
+    var syncedFromServer = false;   // tracks whether we've done the initial sync
+
+    // ------------------------------------------------------------------
+    // API helpers
+    // ------------------------------------------------------------------
+
+    function getApiBase() {
+        var api = window.ApiClient;
+        if (!api && window.Connections && window.Connections.currentApiClient) {
+            api = window.Connections.currentApiClient();
+        }
+        if (api && api.serverAddress) {
+            return api.serverAddress().replace(/\/+$/, '');
+        }
+        return window.location ? window.location.origin : '';
+    }
+
+    function getAuthToken() {
+        var api = window.ApiClient;
+        if (!api && window.Connections && window.Connections.currentApiClient) {
+            api = window.Connections.currentApiClient();
+        }
+        if (api && api.accessToken) return api.accessToken();
+        return '';
+    }
+
+    function authHeaders() {
+        return {
+            'X-Emby-Token': getAuthToken(),
+            'Content-Type': 'application/json'
+        };
+    }
+
+    function getCurrentUserId() {
+        var api = window.ApiClient;
+        if (!api && window.Connections && window.Connections.currentApiClient) {
+            api = window.Connections.currentApiClient();
+        }
+        if (api && api.getCurrentUserId) return api.getCurrentUserId();
+        return null;
+    }
+
+    function apiPost(path, body) {
+        return fetch(getApiBase() + path, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify(body)
+        }).then(function(r) {
+            if (!r.ok) throw new Error(path + ' returned ' + r.status);
+            return r.json();
+        });
+    }
+
+    function apiDelete(path) {
+        return fetch(getApiBase() + path, {
+            method: 'DELETE',
+            headers: authHeaders()
+        }).then(function(r) {
+            if (!r.ok) throw new Error(path + ' returned ' + r.status);
+            return r.json();
+        });
+    }
+
+    function apiGet(path) {
+        return fetch(getApiBase() + path, {
+            headers: authHeaders()
+        }).then(function(r) {
+            if (!r.ok) throw new Error(path + ' returned ' + r.status);
+            return r.json();
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Server sync
+    // ------------------------------------------------------------------
+
+    // Sync with the server on load — if a timer is already running (e.g. after
+    // page refresh), resume the countdown from the server's EndTime.
+    function syncFromServer() {
+        if (syncedFromServer) return;
+        syncedFromServer = true;
+
+        var userId = getCurrentUserId();
+        if (!userId) return;
+
+        apiGet('/SleepTimer/TimerByUser/' + userId)
+            .then(function(data) {
+                if (data && data.State === 'Running' && data.RemainingSeconds > 0) {
+                    // Server has an active timer — sync to it
+                    sleepTimerEnd = new Date(data.EndTime).getTime();
+                    currentSessionId = data.SessionId;
+                    popupShown = false;
+                    startCountdown();
+                    console.log('[SleepTimer] Synced from server: ' + data.RemainingSeconds + 's remaining, session ' + data.SessionId);
+                } else if (data && data.State === 'PopupPending' && data.PopupRemainingSeconds > 0) {
+                    // Timer expired while the page was loading — show the popup
+                    sleepTimerEnd = new Date(data.EndTime).getTime();
+                    currentSessionId = data.SessionId;
+                    popupShown = true;
+                    showStillWatchingPopup(data.PopupRemainingSeconds);
+                    console.log('[SleepTimer] Synced from server: popup pending, ' + data.PopupRemainingSeconds + 's grace remaining');
+                }
+            })
+            .catch(function(e) {
+                // 404 means no timer — that's fine
+                if (e.message && e.message.indexOf('404') === -1) {
+                    console.error('[SleepTimer] Sync error:', e);
+                }
+            });
+    }
 
     // ------------------------------------------------------------------
     // Button creation and injection
@@ -30,7 +142,6 @@
     }
 
     function createOsdCountdown() {
-        // Wrapper containing the countdown text and a clear button
         var wrapper = document.createElement('div');
         wrapper.className = 'sleepTimerOsdCountdown';
         wrapper.style.cssText = [
@@ -77,13 +188,11 @@
         var sleepBtn = createSleepTimerButton();
         var osdCountdown = createOsdCountdown();
 
-        // Insert after the subtitles button
         var subtitleBtn = osd.querySelector('.btnSubtitles');
         if (subtitleBtn && subtitleBtn.parentNode) {
             subtitleBtn.parentNode.insertBefore(sleepBtn, subtitleBtn.nextSibling);
             subtitleBtn.parentNode.insertBefore(osdCountdown, sleepBtn.nextSibling);
         } else {
-            // Fallback: append to the buttons row
             var buttonsRow = osd.querySelector('.osdButtons');
             if (buttonsRow) {
                 buttonsRow.appendChild(sleepBtn);
@@ -93,10 +202,13 @@
             }
         }
 
-        // If a timer is already running, show the countdown immediately
+        // If a timer is already running (from server sync), show the countdown immediately
         if (sleepTimerEnd) {
             updateOsdCountdown(Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000)));
         }
+
+        // Try server sync once the button is in the OSD
+        syncFromServer();
 
         return true;
     }
@@ -117,7 +229,6 @@
     // ------------------------------------------------------------------
 
     function showSleepTimerPanel() {
-        // Toggle: if panel is open, close it
         var existing = document.getElementById('sleepTimerPanel');
         if (existing) {
             existing.remove();
@@ -177,6 +288,11 @@
                     '<button class="stPreset" data-mins="90" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">1.5h</button>',
                     '<button class="stPreset" data-mins="120" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">2h</button>',
                 '</div>',
+                '<div style="display:flex;gap:6px;align-items:center">',
+                    '<input id="stCustomMinutes" type="number" min="1" max="600" placeholder="Custom" style="flex:1;padding:8px 10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;font-size:0.9rem;width:60px" />',
+                    '<span style="color:#888;font-size:0.85rem">min</span>',
+                    '<button id="stCustomStart" style="padding:8px 16px;background:#0084ff;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Start</button>',
+                '</div>',
             '</div>',
 
             '<div id="stActiveControls" style="display:' + (activeTimer > 0 ? 'block' : 'none') + ';margin-bottom:12px;padding-top:12px;border-top:1px solid #333">',
@@ -190,15 +306,11 @@
 
         document.body.appendChild(panel);
 
-        // Auto-close after 4 seconds of inactivity
-        // Use mousemove and click to reset the timer, so hovering over
-        // the panel keeps it alive. stopPropagation on button clicks prevents
-        // the panel click handler from double-firing.
         panel.addEventListener('click', startAutoClose);
         panel.addEventListener('mousemove', startAutoClose);
         startAutoClose();
 
-        // Preset duration buttons
+        // Preset duration buttons — call server API to start
         var presetBtns = panel.querySelectorAll('.stPreset');
         for (var i = 0; i < presetBtns.length; i++) {
             presetBtns[i].addEventListener('click', function(e) {
@@ -210,20 +322,43 @@
             });
         }
 
-        // Active timer controls
+        // Custom duration input — call server API to start
+        var customInput = document.getElementById('stCustomMinutes');
+        var customStartBtn = document.getElementById('stCustomStart');
+        if (customStartBtn) {
+            customStartBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                cancelAutoClose();
+                var mins = parseInt(customInput.value, 10);
+                if (isNaN(mins) || mins <= 0 || mins > 600) {
+                    notify('Enter a duration between 1 and 600 minutes');
+                    return;
+                }
+                startDurationTimer(mins);
+                panel.remove();
+            });
+            // Enter key in the input also starts the timer
+            customInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    customStartBtn.click();
+                }
+            });
+        }
+
+        // Active timer controls — call server API to extend/cancel
         if (activeTimer > 0) {
             document.getElementById('stAdd15').addEventListener('click', function(e) {
                 e.stopPropagation();
                 cancelAutoClose();
-                sleepTimerEnd += 15 * 60 * 1000;
-                updateCountdown();
+                extendTimer(15);
                 startAutoClose();
             });
             document.getElementById('stAdd30').addEventListener('click', function(e) {
                 e.stopPropagation();
                 cancelAutoClose();
-                sleepTimerEnd += 30 * 60 * 1000;
-                updateCountdown();
+                extendTimer(30);
                 startAutoClose();
             });
             document.getElementById('stCancel').addEventListener('click', function(e) {
@@ -236,7 +371,7 @@
     }
 
     // ------------------------------------------------------------------
-    // Timer logic
+    // Timer logic (server is source of truth)
     // ------------------------------------------------------------------
 
     function pad2(n) {
@@ -252,11 +387,49 @@
         return m + ':' + pad2(s);
     }
 
+    // Start a timer: tells the server, then starts the local countdown
     function startDurationTimer(minutes) {
-        sleepTimerEnd = Date.now() + minutes * 60 * 1000;
-        popupShown = false;
-        startCountdown();
-        notify('Sleep timer started: ' + minutes + ' minutes');
+        var userId = getCurrentUserId();
+        if (!userId) {
+            console.error('[SleepTimer] No user ID available');
+            return;
+        }
+
+        apiPost('/SleepTimer/Start', {
+            UserId: userId,
+            DurationMinutes: minutes
+        }).then(function(data) {
+            sleepTimerEnd = Date.now() + minutes * 60 * 1000;
+            currentSessionId = data.sessionId || currentSessionId;
+            popupShown = false;
+            startCountdown();
+            notify('Sleep timer started: ' + minutes + ' minutes');
+        }).catch(function(e) {
+            console.error('[SleepTimer] Failed to start timer:', e);
+            notify('Failed to start sleep timer');
+        });
+    }
+
+    // Extend the timer: tells the server, then updates local countdown
+    function extendTimer(additionalMinutes) {
+        var userId = getCurrentUserId();
+        if (!userId || !currentSessionId) {
+            console.error('[SleepTimer] No session ID for extend');
+            return;
+        }
+
+        apiPost('/SleepTimer/Extend', {
+            UserId: userId,
+            SessionId: currentSessionId,
+            AdditionalMinutes: additionalMinutes
+        }).then(function() {
+            sleepTimerEnd += additionalMinutes * 60 * 1000;
+            updateCountdown();
+            notify('Sleep timer extended by ' + additionalMinutes + ' minutes');
+        }).catch(function(e) {
+            console.error('[SleepTimer] Failed to extend timer:', e);
+            notify('Failed to extend sleep timer');
+        });
     }
 
     function startCountdown() {
@@ -278,29 +451,31 @@
     function updateCountdown() {
         if (!sleepTimerEnd) return;
         var remaining = Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000));
-        // Update panel countdown
         var panelCountdown = document.getElementById('sleepTimerCountdown');
         if (panelCountdown) panelCountdown.textContent = formatTime(remaining);
-        // Update OSD countdown
         updateOsdCountdown(remaining);
     }
 
+    // Cancel the timer: tells the server, then clears local state
     function cancelTimer() {
+        if (currentSessionId) {
+            apiDelete('/SleepTimer/Cancel/' + currentSessionId).catch(function(e) {
+                console.error('[SleepTimer] Failed to cancel timer on server:', e);
+            });
+        }
+
         if (sleepTimerInterval) {
             clearInterval(sleepTimerInterval);
             sleepTimerInterval = null;
         }
         sleepTimerEnd = null;
         popupShown = false;
-        // Clear OSD countdown
         updateOsdCountdown(0);
-        // Clear panel countdown
         var countdown = document.getElementById('sleepTimerCountdown');
         if (countdown) countdown.textContent = '';
         var activeControls = document.getElementById('stActiveControls');
         if (activeControls) activeControls.style.display = 'none';
 
-        // Remove any open popup
         var popup = document.getElementById('sleepTimerPopup');
         if (popup) popup.remove();
     }
@@ -309,10 +484,11 @@
     // "Are you still watching?" popup
     // ------------------------------------------------------------------
 
-    function showStillWatchingPopup() {
-        // Remove any existing popup
+    function showStillWatchingPopup(initialSeconds) {
         var existing = document.getElementById('sleepTimerPopup');
         if (existing) existing.remove();
+
+        var popupSeconds = initialSeconds || Math.floor(popupTimeoutMs / 1000);
 
         var popup = document.createElement('div');
         popup.id = 'sleepTimerPopup';
@@ -336,12 +512,12 @@
         popup.innerHTML = [
             '<div style="font-size:2.5rem;margin-bottom:12px;color:#0084ff">bedtime</div>',
             '<div style="font-size:1.4rem;font-weight:600;color:#fff;margin-bottom:8px">Are you still watching?</div>',
-            '<div style="font-size:0.9rem;color:#888;margin-bottom:24px">Playback will stop in <span id="popupCountdown">60</span> seconds.</div>',
+            '<div style="font-size:0.9rem;color:#888;margin-bottom:24px">Playback will stop in <span id="popupCountdown">' + popupSeconds + '</span> seconds.</div>',
             '<button id="popupContinue" style="padding:12px 32px;background:#0084ff;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">Continue Watching</button>',
             '<button id="popupStop" style="margin-left:12px;padding:12px 24px;background:transparent;color:#888;border:1px solid #333;border-radius:8px;cursor:pointer;font-size:0.9rem">Stop Now</button>'
         ].join('');
 
-        // Set the bedtime icon properly (the text "bedtime" above is a placeholder)
+        // Set the bedtime icon properly
         var iconSpan = popup.querySelector('div[style*="font-size:2.5rem"]');
         if (iconSpan) {
             iconSpan.innerHTML = '<span class="material-icons" style="font-size:2.5rem">bedtime</span>';
@@ -350,7 +526,6 @@
         document.body.appendChild(popup);
 
         // Countdown for the popup
-        var popupSeconds = Math.floor(popupTimeoutMs / 1000);
         var popupInterval = setInterval(function() {
             popupSeconds--;
             var el = document.getElementById('popupCountdown');
@@ -359,118 +534,113 @@
                 clearInterval(popupInterval);
                 var p = document.getElementById('sleepTimerPopup');
                 if (p) p.remove();
+                // Timeout — tell the server to stop (server fallback will also fire)
+                sendPopupResponse('stop');
                 stopPlayback();
-                cancelTimer();
+                clearLocalTimerState();
             }
         }, 1000);
 
-        // Continue button: dismiss popup, reset timer state
+        // Continue button: tell server "continue", clear local state
         document.getElementById('popupContinue').addEventListener('click', function() {
             clearInterval(popupInterval);
             var p = document.getElementById('sleepTimerPopup');
             if (p) p.remove();
-            // Reset so the user can start a new timer from the panel
-            cancelTimer();
-            notify('Sleep timer cancelled -- enjoy your show!');
+            sendPopupResponse('continue');
+            clearLocalTimerState();
+            notify('Sleep timer cancelled — enjoy your show!');
         });
 
-        // Stop button: stop immediately
+        // Stop button: tell server "stop", stop playback
         document.getElementById('popupStop').addEventListener('click', function() {
             clearInterval(popupInterval);
             var p = document.getElementById('sleepTimerPopup');
             if (p) p.remove();
+            sendPopupResponse('stop');
             stopPlayback();
-            cancelTimer();
+            clearLocalTimerState();
         });
 
-        // Also stop on popup dismiss (clicking outside, Escape key)
-        popup.addEventListener('click', function(e) {
-            if (e.target === popup) {
-                // Clicked on the overlay itself, not a child -- treat as dismiss
-            }
-        });
-
+        // Escape: dismiss popup without stopping (accidental press protection)
+        // Tell server "continue" so it doesn't hard-stop
         document.addEventListener('keydown', function onEsc(e) {
             if (e.key === 'Escape') {
-                // Escape dismisses the popup but does NOT stop playback
-                // (user might have accidentally pressed it)
                 clearInterval(popupInterval);
                 var p = document.getElementById('sleepTimerPopup');
                 if (p) p.remove();
-                cancelTimer();
+                sendPopupResponse('continue');
+                clearLocalTimerState();
                 notify('Sleep timer dismissed');
                 document.removeEventListener('keydown', onEsc);
             }
         });
     }
 
+    // Send popup response to the server
+    function sendPopupResponse(action) {
+        var userId = getCurrentUserId();
+        if (!userId) return;
+
+        apiPost('/SleepTimer/PopupResponse', {
+            UserId: userId,
+            SessionId: currentSessionId || '',
+            Action: action
+        }).catch(function(e) {
+            console.error('[SleepTimer] Failed to send popup response:', e);
+        });
+    }
+
+    // Clear local timer state without contacting the server
+    function clearLocalTimerState() {
+        if (sleepTimerInterval) {
+            clearInterval(sleepTimerInterval);
+            sleepTimerInterval = null;
+        }
+        sleepTimerEnd = null;
+        popupShown = false;
+        updateOsdCountdown(0);
+        var countdown = document.getElementById('sleepTimerCountdown');
+        if (countdown) countdown.textContent = '';
+        var activeControls = document.getElementById('stActiveControls');
+        if (activeControls) activeControls.style.display = 'none';
+    }
+
     // ------------------------------------------------------------------
-    // Stop playback
+    // Stop playback (client-side fallback only)
+    // The server is the primary stopper via SendPlaystateCommand.
+    // This is only used when the client needs to stop immediately
+    // (popup timeout) and the server PopupResponse call may not have
+    // propagated yet.
     // ------------------------------------------------------------------
 
     function stopPlayback() {
-        console.log('[SleepTimer] Attempting to stop playback...');
         var apiClient = window.ApiClient;
         if (!apiClient) {
-            console.error('[SleepTimer] No ApiClient available');
-            var exitBtn = document.querySelector('.btnExit');
-            if (exitBtn) { console.log('[SleepTimer] Clicking btnExit'); exitBtn.click(); }
+            console.error('[SleepTimer] No ApiClient for stop fallback');
             return;
         }
 
         var token = apiClient.accessToken();
         var userId = apiClient.getCurrentUserId();
-
-        // Build sessions URL using apiClient.getUrl() for correct base path
         var sessionsUrl = apiClient.getUrl('Sessions');
-        console.log('[SleepTimer] Sessions URL:', sessionsUrl);
 
-        // Method 1: Find active session and send Stop command
         fetch(sessionsUrl, {
             headers: { 'X-Emby-Token': token }
         })
-        .then(function(r) {
-            console.log('[SleepTimer] Sessions response:', r.status, r.statusText);
-            if (!r.ok) throw new Error('Sessions request failed: ' + r.status);
-            return r.json();
-        })
+        .then(function(r) { return r.json(); })
         .then(function(sessions) {
-            console.log('[SleepTimer] Found', sessions.length, 'sessions');
-            var mySession = null;
             for (var i = 0; i < sessions.length; i++) {
                 if (sessions[i].UserId === userId && sessions[i].NowPlayingItem != null) {
-                    mySession = sessions[i];
-                    break;
+                    var stopUrl = apiClient.getUrl('Sessions/' + sessions[i].Id + '/Playing/Stop');
+                    fetch(stopUrl, {
+                        method: 'POST',
+                        headers: { 'X-Emby-Token': token }
+                    }).catch(function(e) { console.error('[SleepTimer] Stop fallback failed:', e); });
+                    return;
                 }
             }
-            if (mySession) {
-                console.log('[SleepTimer] Found active session:', mySession.Id, 'playing:', mySession.NowPlayingItem.Name);
-                var stopUrl = apiClient.getUrl('Sessions/' + mySession.Id + '/Playing/Stop');
-                console.log('[SleepTimer] Stop URL:', stopUrl);
-                fetch(stopUrl, {
-                    method: 'POST',
-                    headers: { 'X-Emby-Token': token }
-                })
-                .then(function(r) { console.log('[SleepTimer] Stop response:', r.status, r.statusText); })
-                .catch(function(e) { console.error('[SleepTimer] Stop failed:', e); });
-            } else {
-                console.log('[SleepTimer] No active playing session found');
-                // List all sessions for this user for debugging
-                sessions.forEach(function(s) {
-                    if (s.UserId === userId) {
-                        console.log('[SleepTimer] Session:', s.Id, 'Device:', s.DeviceName, 'Playing:', !!s.NowPlayingItem);
-                    }
-                });
-            }
         })
-        .catch(function(e) { console.error('[SleepTimer] Session lookup failed:', e); });
-
-        // Method 2: DOM fallback after delay
-        setTimeout(function() {
-            console.log('[SleepTimer] Trying DOM fallback');
-            var exitBtn = document.querySelector('.btnExit');
-            if (exitBtn) { console.log('[SleepTimer] Clicking btnExit'); exitBtn.click(); }
-        }, 1000);
+        .catch(function(e) { console.error('[SleepTimer] Stop fallback session lookup failed:', e); });
     }
 
     // ------------------------------------------------------------------
@@ -494,16 +664,27 @@
     var injectInterval = setInterval(function() {
         if (injectButton()) {
             clearInterval(injectInterval);
+            injectInterval = null;
+            if (observer) { observer.disconnect(); observer = null; }
         }
     }, 1000);
 
     var observer = new MutationObserver(function() {
         if (document.querySelector('.videoOsdBottom') && !document.querySelector('.btnSleepTimer')) {
-            injectButton();
+            if (injectButton()) {
+                if (injectInterval) { clearInterval(injectInterval); injectInterval = null; }
+                observer.disconnect();
+                observer = null;
+            }
         }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Only observe direct childList changes on body — subtree:true fires on
+    // every DOM mutation in the entire page which is wasteful.
+    observer.observe(document.body, { childList: true });
     window.__sleepTimerObserver = observer;
+
+    // Also try syncing on script load (covers cases where the OSD is already present)
+    syncFromServer();
 
     // ------------------------------------------------------------------
     // Cleanup function (used by reinstall/uninstall)
@@ -514,6 +695,13 @@
         sleepTimerInterval = null;
         sleepTimerEnd = null;
         popupShown = false;
+        currentSessionId = null;
+        syncedFromServer = false;
+
+        if (injectInterval) {
+            clearInterval(injectInterval);
+            injectInterval = null;
+        }
 
         if (window.__sleepTimerObserver) {
             window.__sleepTimerObserver.disconnect();

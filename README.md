@@ -5,6 +5,7 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 ## Features
 
 - **Preset durations**: 15m, 30m, 45m, 1h, 1.5h, 2h
+- **Custom duration**: Type any number of minutes (1–600) for a non-preset timer
 - **OSD countdown display**: Live countdown next to the bedtime button in the player -- always visible while a timer is running
 - **One-click clear**: Clear button (X) next to the countdown stops the timer without navigating into the panel
 - **"Are you still watching?" popup**: When the timer hits zero, a centered dialog appears with a 60-second countdown. Playback only stops if you don't respond or click "Stop Now". Click "Continue Watching" to dismiss and keep playing.
@@ -89,7 +90,7 @@ To remove the sleep timer button from a device:
 
 1. Play any video
 2. Click the moon icon in the player controls
-3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h)
+3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h) or type a custom number of minutes
 4. A countdown appears in the OSD next to the bedtime button
 5. Click the moon icon again to reopen the panel and use **+15m**, **+30m**, or **Cancel**
 6. Click the **X** next to the countdown to clear the timer without opening the panel
@@ -107,13 +108,13 @@ The plugin exposes REST endpoints under `/SleepTimer/`:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/SleepTimer/Config` | Get plugin configuration |
-| POST | `/SleepTimer/Config` | Save plugin configuration |
 | GET | `/SleepTimer/Timers` | List all active timers |
 | GET | `/SleepTimer/Timer/{sessionId}` | Get timer for a specific session |
+| GET | `/SleepTimer/TimerByUser/{userId}` | Get timer for a user (used by client on page load) |
 | POST | `/SleepTimer/Start` | Start a sleep timer |
 | DELETE | `/SleepTimer/Cancel/{sessionId}` | Cancel a timer |
 | POST | `/SleepTimer/Extend` | Extend a running timer |
+| POST | `/SleepTimer/PopupResponse` | Report user's response to the popup ("continue" or "stop") |
 
 ### Start Timer Example
 
@@ -125,10 +126,29 @@ POST /SleepTimer/Start
 }
 ```
 
+### Popup Response Example
+
+```json
+POST /SleepTimer/PopupResponse
+{
+    "UserId": "b776d728-908e-4837-9bc7-56041eabf40a",
+    "Action": "continue"
+}
+```
+
+`Action` can be `"continue"` (user dismissed the popup, keep playing) or `"stop"` (user clicked Stop Now or popup timed out).
+
+## Architecture
+
+The **server is the source of truth** for timer state. The client calls the API for every action (start, extend, cancel, popup response). When the timer reaches zero, the server transitions to a `PopupPending` state and waits up to 60 seconds for the client to report the user's response. If the client never responds (closed tab, crashed, page refresh), the server stops playback as a fallback.
+
+On page load, the client syncs with the server via `GET /SleepTimer/TimerByUser/{userId}` — if a timer is already running, it resumes the countdown from the server's `EndTime`. This means refreshing the page no longer loses your timer.
+
 ## Limitations
 
 - The player button requires per-device installation (Jellyfin plugin framework limitation)
 - Web client only -- does not work in native Jellyfin apps (Android TV, iOS, Roku, etc.)
+- Timers are keyed by session ID, which is per-device. If you start a timer on your phone and then switch to the TV, the phone's timer will still fire (and stop playback on the phone) while the TV has no timer. This is fine for the typical sleep timer use case (one device, falling asleep) but worth knowing.
 
 ## Tech Stack
 

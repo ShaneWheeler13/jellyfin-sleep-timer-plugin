@@ -49,14 +49,6 @@ public class SleepTimerMiddleware
             return;
         }
 
-        // Check Accept header -- only intercept HTML responses
-        var accept = context.Request.Headers.Accept.ToString();
-        if (!accept.Contains("text/html", StringComparison.OrdinalIgnoreCase) && !isWebRoot)
-        {
-            await _next(context);
-            return;
-        }
-
         try
         {
             // Buffer the response

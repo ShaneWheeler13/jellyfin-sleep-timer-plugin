@@ -20,13 +20,7 @@
                     #SleepTimerConfigPage .sleepTimerSection {
                         margin-bottom: 2rem;
                     }
-                    #SleepTimerConfigPage .sleepTimerLabel {
-                        display: block;
-                        margin-bottom: 0.4rem;
-                        color: #ccc;
-                        font-size: 0.9rem;
-                        font-weight: 500;
-                    }
+
                     #SleepTimerConfigPage .sleepTimerInfo {
                         color: #888;
                         font-size: 0.85rem;
@@ -85,33 +79,8 @@
                         color: #888;
                         cursor: not-allowed;
                     }
-                    #SleepTimerConfigPage .sleepTimerBtn.save {
-                        background: #0084ff;
-                        color: white;
-                        padding: 0.7rem 2rem;
-                        font-size: 1rem;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn.save:hover {
-                        background: #006acc;
-                    }
-                    #SleepTimerConfigPage .sleepTimerCheckbox {
-                        display: flex;
-                        align-items: center;
-                        gap: 0.6rem;
-                    }
-                    /* Margin fallback for checkbox without gap support */
-                    #SleepTimerConfigPage .sleepTimerCheckbox > input + span {
-                        margin-left: 0.6rem;
-                    }
-                    #SleepTimerConfigPage .sleepTimerInput {
-                        background: #1a1a1a;
-                        border: 1px solid #333;
-                        color: #ddd;
-                        padding: 0.5rem 0.8rem;
-                        border-radius: 4px;
-                        width: 140px;
-                        font-size: 0.9rem;
-                    }
+
+
                     #SleepTimerConfigPage .sleepTimerDivider {
                         border: none;
                         border-top: 1px solid #222;
@@ -139,7 +108,6 @@
                         </p>
                     </div>
 
-                    <button class="sleepTimerBtn save" onclick="saveConfig()">Save</button>
                 </div>
 
                 <script>
@@ -176,39 +144,6 @@
                             'Authorization': 'MediaBrowser Token=' + getAuthToken(),
                             'Content-Type': 'application/json'
                         };
-                    }
-
-                    // --- Config load/save ---
-
-                    function loadConfig() {
-                        fetch(getApiBase() + '/SleepTimer/Config', {
-                            headers: authHeaders()
-                        })
-                        .then(function(r) { return r.json(); })
-                        .then(function(config) {
-                            // No configurable options yet
-                        })
-                        .catch(function(e) {
-                            console.error('[SleepTimer] Failed to load config:', e);
-                        });
-                    }
-
-                    function saveConfig() {
-                        fetch(getApiBase() + '/SleepTimer/Config', {
-                            method: 'POST',
-                            headers: authHeaders(),
-                            body: JSON.stringify({})
-                        })
-                        .then(function(r) {
-                            if (r.ok) {
-                                alert('Configuration saved');
-                            } else {
-                                alert('Failed to save: ' + r.status + ' ' + r.statusText);
-                            }
-                        })
-                        .catch(function(e) {
-                            alert('Error: ' + e.message);
-                        });
                     }
 
                     // --- Script injection helper (avoids eval/CSP issues) ---
@@ -309,7 +244,6 @@
 
                     initButtons();
                     updateInstallUI();
-                    loadConfig();
                 </script>
             </div>
         </div>
