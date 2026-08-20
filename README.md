@@ -5,11 +5,10 @@ A sleep timer plugin for [Jellyfin](https://jellyfin.org) that stops media playb
 ## Features
 
 - **Preset durations**: 15m, 30m, 45m, 1h, 1.5h, 2h
-- **Custom duration**: Type any number of minutes (1–600) for a non-preset timer
 - **OSD countdown display**: Live countdown next to the bedtime button in the player -- always visible while a timer is running
 - **One-click clear**: Clear button (X) next to the countdown stops the timer without navigating into the panel
 - **"Are you still watching?" popup**: When the timer hits zero, a centered dialog appears with a 60-second countdown. Playback only stops if you don't respond or click "Stop Now". Click "Continue Watching" to dismiss and keep playing.
-- **Extend on the fly**: Add +15m or +30m to a running timer without restarting it
+- **Extend on the fly**: Add +5m, +15m, or +30m to a running timer without restarting it
 - **Cancel anytime**: One-click cancel from the sleep timer panel or the OSD clear button
 - **Per-device install/uninstall**: Install and uninstall the player button directly from the plugin config page
 - **Server-side persistence**: The sleep timer button survives server restarts and page reloads automatically via middleware injection
@@ -90,9 +89,9 @@ To remove the sleep timer button from a device:
 
 1. Play any video
 2. Click the moon icon in the player controls
-3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h) or type a custom number of minutes
+3. Choose a preset duration (15m, 30m, 45m, 1h, 1.5h, 2h)
 4. A countdown appears in the OSD next to the bedtime button
-5. Click the moon icon again to reopen the panel and use **+15m**, **+30m**, or **Cancel**
+5. Click the moon icon again to reopen the panel and use **+5m**, **+15m**, **+30m**, or **Cancel**
 6. Click the **X** next to the countdown to clear the timer without opening the panel
 
 When the timer reaches zero, an **"Are you still watching?"** popup appears with a 60-second countdown:

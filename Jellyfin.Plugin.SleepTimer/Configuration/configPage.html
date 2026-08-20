@@ -152,7 +152,10 @@
                         var target = null;
                         try {
                             target = window.top;
+                            // Test access — this will throw if cross-origin
+                            var _ = target.document;
                         } catch (e) {
+                            console.log('[SleepTimer] Cannot access window.top, using current window');
                             target = window;
                         }
                         // Remove previous inject script
@@ -160,7 +163,7 @@
                         if (old) old.remove();
                         var s = target.document.createElement('script');
                         s.id = 'sleepTimerInjectScript';
-                        s.src = getApiBase() + '/web/ConfigurationPage?name=sleep-timer-inject.js';
+                        s.src = '/web/ConfigurationPage?name=sleep-timer-inject.js';
                         s.onload = function() { console.log('[SleepTimer] Inject script loaded'); };
                         s.onerror = function() { console.error('[SleepTimer] Failed to load inject script'); };
                         target.document.head.appendChild(s);
@@ -226,6 +229,7 @@
                             localStorage.setItem(INJECT_KEY, 'true');
                             injectScript();
                             updateInstallUI();
+                            notify('Sleep button installed! Play a video to see it.');
                         });
 
                         uninstallBtn.addEventListener('click', function() {

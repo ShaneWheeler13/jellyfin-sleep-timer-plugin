@@ -280,7 +280,7 @@
             '</div>',
 
             '<div id="stDurationSection" style="margin-bottom:16px">',
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">',
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">',
                     '<button class="stPreset" data-mins="15" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">15m</button>',
                     '<button class="stPreset" data-mins="30" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">30m</button>',
                     '<button class="stPreset" data-mins="45" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">45m</button>',
@@ -288,15 +288,11 @@
                     '<button class="stPreset" data-mins="90" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">1.5h</button>',
                     '<button class="stPreset" data-mins="120" style="padding:10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;font-size:0.95rem">2h</button>',
                 '</div>',
-                '<div style="display:flex;gap:6px;align-items:center">',
-                    '<input id="stCustomMinutes" type="number" min="1" max="600" placeholder="Custom" style="flex:1;padding:8px 10px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;font-size:0.9rem;width:60px" />',
-                    '<span style="color:#888;font-size:0.85rem">min</span>',
-                    '<button id="stCustomStart" style="padding:8px 16px;background:#0084ff;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Start</button>',
-                '</div>',
             '</div>',
 
             '<div id="stActiveControls" style="display:' + (activeTimer > 0 ? 'block' : 'none') + ';margin-bottom:12px;padding-top:12px;border-top:1px solid #333">',
                 '<div style="display:flex">',
+                    '<button id="stAdd5" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;margin-right:8px">+5m</button>',
                     '<button id="stAdd15" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;margin-right:8px">+15m</button>',
                     '<button id="stAdd30" style="flex:1;padding:8px;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:6px;cursor:pointer;margin-right:8px">+30m</button>',
                     '<button id="stCancel" style="flex:1;padding:8px;background:#d32f2f;color:#fff;border:none;border-radius:6px;cursor:pointer">Cancel</button>',
@@ -322,33 +318,14 @@
             });
         }
 
-        // Custom duration input — call server API to start
-        var customInput = document.getElementById('stCustomMinutes');
-        var customStartBtn = document.getElementById('stCustomStart');
-        if (customStartBtn) {
-            customStartBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                cancelAutoClose();
-                var mins = parseInt(customInput.value, 10);
-                if (isNaN(mins) || mins <= 0 || mins > 600) {
-                    notify('Enter a duration between 1 and 600 minutes');
-                    return;
-                }
-                startDurationTimer(mins);
-                panel.remove();
-            });
-            // Enter key in the input also starts the timer
-            customInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    customStartBtn.click();
-                }
-            });
-        }
-
         // Active timer controls — call server API to extend/cancel
         if (activeTimer > 0) {
+            document.getElementById('stAdd5').addEventListener('click', function(e) {
+                e.stopPropagation();
+                cancelAutoClose();
+                extendTimer(5);
+                startAutoClose();
+            });
             document.getElementById('stAdd15').addEventListener('click', function(e) {
                 e.stopPropagation();
                 cancelAutoClose();

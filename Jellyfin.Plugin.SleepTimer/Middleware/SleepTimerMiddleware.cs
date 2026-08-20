@@ -19,7 +19,6 @@ public class SleepTimerMiddleware
     // Use <script src> instead of inline script to avoid CSP blocks
     private const string InjectScriptTag = """
 <script src="/web/ConfigurationPage?name=sleeptimer-autoloader.js"></script>
-</body>
 """;
 
     /// <summary>
@@ -96,9 +95,9 @@ public class SleepTimerMiddleware
         catch (Exception ex)
         {
             _logger.LogError(ex, "Sleep Timer middleware error");
-            // Restore the original stream and continue
+            // Restore the original stream — do NOT re-invoke _next
+            // (the response may have already started, re-invoking causes corruption)
             context.Response.Body = originalBodyStream;
-            await _next(context);
         }
     }
 }
