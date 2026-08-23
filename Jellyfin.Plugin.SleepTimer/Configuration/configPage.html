@@ -112,7 +112,7 @@
 
                 <script>
                     // --- API helpers ---
-
+                    // Resolve the Jellyfin server address from ApiClient or location fallback
                     function getApiBase() {
                         // Try multiple sources for the API client
                         var api = window.ApiClient;
@@ -130,6 +130,7 @@
                         return '';
                     }
 
+                    // Extract the auth token from ApiClient
                     function getAuthToken() {
                         var api = window.ApiClient;
                         if (!api && window.Connections && window.Connections.currentApiClient) {
@@ -139,6 +140,7 @@
                         return '';
                     }
 
+                    // Build headers with the Emby auth token for API requests
                     function authHeaders() {
                         return {
                             'Authorization': 'MediaBrowser Token=' + getAuthToken(),
@@ -146,8 +148,9 @@
                         };
                     }
 
-                    // --- Script injection helper (avoids eval/CSP issues) ---
-
+                    // --- Script injection helper ---
+                    // Injects the sleep-timer-inject.js <script> tag into the top window.
+                    // Uses <script src> instead of eval to avoid CSP issues.
                     function injectScript() {
                         var target = null;
                         try {
@@ -170,9 +173,11 @@
                     }
 
                     // --- Install / Uninstall ---
-
+                    // Installs are per-device via localStorage. The middleware-injected
+                    // auto-loader checks this flag on every page load.
                     var INJECT_KEY = 'sleeptimer_installed';
 
+                    // Updates the install status banner and button states
                     function updateInstallUI() {
                         var installed = localStorage.getItem(INJECT_KEY) === 'true';
                         var status = document.getElementById('injectStatus');
@@ -192,6 +197,8 @@
                         }
                     }
 
+                    // Runs cleanup if the inject script provided one, removes the
+                    // script tag, and clears the localStorage install flag.
                     function clearInjection() {
                         // Run cleanup if the inject script provided one
                         var target = window;
@@ -207,13 +214,15 @@
                         localStorage.removeItem(INJECT_KEY);
                     }
 
+                    // Shows a Jellyfin toast if available
                     function notify(message) {
                         if (window.require) {
                             window.require(['toast'], function(toast) { toast(message); });
                         }
                     }
 
-                    // Wire up button listeners (use DOMContentLoaded fallback)
+                    // Wire up button listeners. Retries on setTimeout if the DOM
+                    // isn't ready yet.
                     function initButtons() {
                         var installBtn = document.getElementById('installBtn');
                         var uninstallBtn = document.getElementById('uninstallBtn');
@@ -240,12 +249,9 @@
                     }
 
                     // --- Init ---
-
-                    // Note: Auto-loading on every page is now handled by server-side middleware.
-                    // The middleware injects an auto-loader script into Jellyfin's main HTML that
-                    // checks localStorage and loads the inject script if installed.
+                    // Auto-loading on every page is handled by server-side middleware
+                    // that injects sleeptimer-autoloader.js into Jellyfin's main HTML.
                     // This persists across server restarts.
-
                     initButtons();
                     updateInstallUI();
                 </script>

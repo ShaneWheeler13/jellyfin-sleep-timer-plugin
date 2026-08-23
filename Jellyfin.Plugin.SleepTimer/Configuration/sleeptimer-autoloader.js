@@ -1,9 +1,14 @@
-// Sleep Timer auto-loader: checks if installed and loads the inject script
-// Served as a plugin page so it can be referenced via <script src> (avoids CSP inline-script issues)
+// Sleep Timer auto-loader
+//
+// Injected into Jellyfin's main HTML by SleepTimerMiddleware. Checks
+// localStorage for the install flag and, if set, loads the full client
+// injection script. Served as a plugin page so it can be referenced via
+// <script src> (avoids CSP inline-script restrictions).
 (function() {
-    // Only run in the top window (not iframes like the config page)
+    // Skip iframes (config page, etc.) — only run in the top window
     if (window.top !== window.self) return;
 
+    // Only load if the user has installed the button on this device
     if (localStorage.getItem('sleeptimer_installed') !== 'true') return;
 
     // Remove any previous inject script

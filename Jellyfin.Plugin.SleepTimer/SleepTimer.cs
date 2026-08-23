@@ -1,85 +1,90 @@
 namespace Jellyfin.Plugin.SleepTimer;
 
 /// <summary>
-/// Represents a sleep timer for a playback session.
+/// Data model for a single sleep timer associated with a Jellyfin playback session.
+/// The server holds the authoritative copy; the client mirrors it via API calls.
 /// </summary>
 public class SleepTimer
 {
     /// <summary>
-    /// Gets or sets the session ID.
+    /// Jellyfin session ID this timer is bound to.
     /// </summary>
     public string SessionId { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the user ID.
+    /// Jellyfin user ID that owns this session.
     /// </summary>
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Gets or sets the timer start time (UTC).
+    /// When the timer was started (UTC).
     /// </summary>
     public DateTime StartTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the timer end time (UTC).
+    /// When the timer should expire (UTC). The monitor loop compares this
+    /// against the current time to detect expiry.
     /// </summary>
     public DateTime EndTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the duration in minutes.
+    /// Original requested duration in minutes.
     /// </summary>
     public int DurationMinutes { get; set; }
 
     /// <summary>
-    /// Gets or sets whether the timer has expired.
+    /// True once the timer has fully expired and playback has been stopped.
     /// </summary>
     public bool IsExpired { get; set; }
 
     /// <summary>
-    /// Gets or sets the timer state.
+    /// Current lifecycle state. See <see cref="SleepTimerState"/>.
     /// </summary>
     public SleepTimerState State { get; set; } = SleepTimerState.Running;
 
     /// <summary>
-    /// Gets or sets when the popup grace period ends (UTC).
-    /// Set when the timer reaches zero and the popup is shown.
+    /// Deadline for the "Are you still watching?" grace period (UTC).
+    /// Set when the timer transitions from Running to PopupPending.
+    /// If the client doesn't respond before this time, the server hard-stops playback.
     /// </summary>
     public DateTime? PopupDeadline { get; set; }
 
     /// <summary>
-    /// Gets the remaining time before the timer reaches zero.
+    /// Time left before the countdown reaches zero. Negative if already expired.
     /// </summary>
     public TimeSpan Remaining => EndTime - DateTime.UtcNow;
 
     /// <summary>
-    /// Gets the remaining time in the popup grace period, or null if no popup is pending.
+    /// Time left in the popup grace period, or null if no popup is pending.
     /// </summary>
     public TimeSpan? PopupRemaining => PopupDeadline.HasValue ? PopupDeadline.Value - DateTime.UtcNow : null;
 }
 
 /// <summary>
-/// Represents the state of a sleep timer.
+/// Lifecycle states for a sleep timer.
 /// </summary>
 public enum SleepTimerState
 {
     /// <summary>
-    /// Timer is counting down.
+    /// Counting down toward EndTime.
     /// </summary>
     Running,
 
     /// <summary>
-    /// Timer has reached zero and the "Are you still watching?" popup is showing.
-    /// The server waits for a client response before stopping playback.
+    /// Countdown has reached zero. The "Are you still watching?" popup is
+    /// showing on the client. The server waits for a response until
+    /// PopupDeadline, then hard-stops if none comes.
     /// </summary>
     PopupPending,
 
     /// <summary>
-    /// Timer has been cancelled by the user.
+    /// User explicitly cancelled the timer (or clicked "Continue Watching").
     /// </summary>
     Cancelled,
 
     /// <summary>
-    /// Playback has been stopped (either by user clicking "Stop Now" or by the grace period expiring).
+    /// Playback has been stopped — either the user clicked "Stop Now" or
+    /// the popup grace period elapsed without a response.
     /// </summary>
     Stopped
 }

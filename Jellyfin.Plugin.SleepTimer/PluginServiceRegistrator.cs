@@ -9,7 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Jellyfin.Plugin.SleepTimer;
 
 /// <summary>
-/// Register Sleep Timer services.
+/// Registers the Sleep Timer API controller and middleware with the
+/// Jellyfin DI container.
 /// </summary>
 public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
@@ -24,7 +25,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 }
 
 /// <summary>
-/// Startup filter that registers the Sleep Timer middleware in the request pipeline.
+/// Inserts the Sleep Timer middleware at the start of the pipeline so it
+/// can intercept HTML responses before they reach the client.
 /// </summary>
 public class SleepTimerStartupFilter : IStartupFilter
 {

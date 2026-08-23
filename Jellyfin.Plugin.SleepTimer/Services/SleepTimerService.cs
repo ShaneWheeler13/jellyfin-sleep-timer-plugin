@@ -5,10 +5,10 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SleepTimer.Services;
 
 /// <summary>
-/// API controller for sleep timer operations.
+/// REST API controller for sleep timer operations.
 /// The frontend calls these endpoints for every timer action so the server
-/// stays in sync. The server monitoring loop acts as a fallback if the client
-/// tab is closed or crashes.
+/// stays in sync. Endpoints: start, extend, cancel, popup response, and
+/// timer queries (by session or user).
 /// </summary>
 [ApiController]
 [Route("SleepTimer")]
@@ -18,7 +18,7 @@ public class SleepTimerService : ControllerBase
     private readonly ILogger<SleepTimerService> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SleepTimerService"/> class.
+    /// Creates the controller.
     /// </summary>
     public SleepTimerService(ISessionManager sessionManager, ILogger<SleepTimerService> logger)
     {
@@ -27,7 +27,7 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Get all active sleep timers.
+    /// Returns all active timers across all sessions.
     /// </summary>
     [HttpGet]
     [Route("Timers")]
@@ -55,10 +55,10 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Get the sleep timer for a specific session.
+    /// Returns the timer for a specific session, or 404 if none.
     /// Used by the client on page load to sync with an existing server-side timer.
     /// </summary>
-    /// <param name="sessionId">The session ID.</param>
+    /// <param name="sessionId">Jellyfin session ID.</param>
     [HttpGet]
     [Route("Timer/{sessionId}")]
     public IActionResult GetTimer(string sessionId)
@@ -89,10 +89,11 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Get the active sleep timer for the current user (by user ID).
-    /// Convenience endpoint for the client to find its timer on page load.
+    /// Returns the active timer for a user, or 404 if none.
+    /// Convenience endpoint — the client uses this on load to find its timer
+    /// without needing the session ID.
     /// </summary>
-    /// <param name="userId">The user ID.</param>
+    /// <param name="userId">Jellyfin user ID (GUID).</param>
     [HttpGet]
     [Route("TimerByUser/{userId}")]
     public IActionResult GetTimerByUser(string userId)
@@ -128,8 +129,8 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Start a sleep timer.
-    /// Called by the client when the user picks a preset duration.
+    /// Start a sleep timer for a user. If SessionId is omitted, the server
+    /// auto-detects the user's active playing session.
     /// </summary>
     [HttpPost]
     [Route("Start")]
@@ -170,10 +171,10 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Cancel a sleep timer.
-    /// Called by the client when the user cancels the timer or dismisses the popup with "Continue".
+    /// Cancel a timer by session ID. Called when the user cancels the timer
+    /// or dismisses the popup with "Continue Watching".
     /// </summary>
-    /// <param name="sessionId">The session ID.</param>
+    /// <param name="sessionId">Jellyfin session ID.</param>
     [HttpDelete]
     [Route("Cancel/{sessionId}")]
     public IActionResult CancelTimer(string sessionId)
@@ -189,8 +190,8 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Extend a sleep timer.
-    /// Called by the client when the user clicks +15m or +30m.
+    /// Add time to an existing timer. If SessionId is omitted, the server
+    /// looks it up by user ID.
     /// </summary>
     [HttpPost]
     [Route("Extend")]
@@ -226,9 +227,9 @@ public class SleepTimerService : ControllerBase
     }
 
     /// <summary>
-    /// Report the user's response to the "Are you still watching?" popup.
-    /// Called by the client when the user clicks "Continue Watching" or "Stop Now",
-    /// or when the popup countdown reaches zero.
+    /// Report the user's popup choice. "continue" cancels the timer;
+    /// "stop" stops playback. Also called when the popup countdown reaches
+    /// zero on the client side.
     /// </summary>
     [HttpPost]
     [Route("PopupResponse")]
@@ -260,64 +261,64 @@ public class SleepTimerService : ControllerBase
 }
 
 /// <summary>
-/// Request to start a sleep timer.
+/// Request body for starting a timer.
 /// </summary>
 public class StartTimerRequest
 {
     /// <summary>
-    /// Gets or sets the user ID.
+    /// User to start the timer for.
     /// </summary>
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Gets or sets the session ID (optional, auto-detected if not provided).
+    /// Optional. Auto-detected from active playing sessions if omitted.
     /// </summary>
     public string? SessionId { get; set; }
 
     /// <summary>
-    /// Gets or sets the duration in minutes.
+    /// Countdown length in minutes.
     /// </summary>
     public int DurationMinutes { get; set; }
 }
 
 /// <summary>
-/// Request to extend a sleep timer.
+/// Request body for extending a timer.
 /// </summary>
 public class ExtendTimerRequest
 {
     /// <summary>
-    /// Gets or sets the user ID.
+    /// User whose timer should be extended.
     /// </summary>
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Gets or sets the session ID (optional, auto-detected if not provided).
+    /// Optional. Auto-detected by user ID if omitted.
     /// </summary>
     public string? SessionId { get; set; }
 
     /// <summary>
-    /// Gets or sets the additional minutes to add.
+    /// Minutes to add to the existing EndTime.
     /// </summary>
     public int AdditionalMinutes { get; set; }
 }
 
 /// <summary>
-/// Request to report the user's response to the popup.
+/// Request body for reporting a popup response.
 /// </summary>
 public class PopupResponseRequest
 {
     /// <summary>
-    /// Gets or sets the user ID.
+    /// User responding to the popup.
     /// </summary>
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Gets or sets the session ID (optional, auto-detected if not provided).
+    /// Optional. Auto-detected by user ID if omitted.
     /// </summary>
     public string? SessionId { get; set; }
 
     /// <summary>
-    /// Gets or sets the action: "continue" or "stop".
+    /// "continue" (cancel timer, keep watching) or "stop" (stop playback).
     /// </summary>
     public string Action { get; set; } = string.Empty;
 }

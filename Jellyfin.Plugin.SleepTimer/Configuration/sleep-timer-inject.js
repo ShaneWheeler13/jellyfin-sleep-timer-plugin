@@ -1,27 +1,32 @@
-// Jellyfin Sleep Timer - Client-side injection script
+// Jellyfin Sleep Timer — Client-side injection script
+//
 // Adds a sleep timer button to the video player OSD and a settings panel.
-// When timer reaches zero, shows "Are you still watching?" dialog.
-// The server is the source of truth for timer state — the client calls
-// the API for every action (start/extend/cancel/popup response) and
-// syncs with the server on load in case the page was refreshed.
+// When the countdown reaches zero, shows an "Are you still watching?" dialog.
+// The server is the source of truth — every action (start, extend, cancel,
+// popup response) goes through the API. On load, the client syncs from the
+// server so a page refresh doesn't lose the timer.
+//
+// This script is loaded by sleeptimer-autoloader.js (via middleware injection)
+// or manually from the config page's Install button.
 
 (function() {
     'use strict';
 
-    // Clean up any previous instance
+    // Clean up any previous instance (re-injection safety)
     if (window.__sleepTimerCleanup) { window.__sleepTimerCleanup(); }
 
-    var sleepTimerInterval = null;
-    var sleepTimerEnd = null;       // epoch ms, synced from server
-    var currentSessionId = null;    // session ID from server
-    var popupShown = false;
-    var popupTimeoutMs = 60000;     // 60 seconds to respond before auto-stop
-    var syncedFromServer = false;   // tracks whether we've done the initial sync
+    var sleepTimerInterval = null;       // setInterval handle for the local countdown
+    var sleepTimerEnd = null;             // epoch ms, synced from server EndTime
+    var currentSessionId = null;          // session ID from server
+    var popupShown = false;               // true while the popup is visible
+    var popupTimeoutMs = 60000;           // grace period before auto-stop (matches server)
+    var syncedFromServer = false;         // guard so syncFromServer runs once
 
     // ------------------------------------------------------------------
-    // API helpers
+    // API helpers — thin wrappers around fetch with auth headers
     // ------------------------------------------------------------------
 
+    // Resolves the Jellyfin server address from ApiClient or location fallback
     function getApiBase() {
         var api = window.ApiClient;
         if (!api && window.Connections && window.Connections.currentApiClient) {
@@ -33,6 +38,7 @@
         return window.location ? window.location.origin : '';
     }
 
+    // Extracts the auth token from ApiClient
     function getAuthToken() {
         var api = window.ApiClient;
         if (!api && window.Connections && window.Connections.currentApiClient) {
@@ -42,6 +48,7 @@
         return '';
     }
 
+    // Builds headers with the Emby auth token for API requests
     function authHeaders() {
         return {
             'X-Emby-Token': getAuthToken(),
@@ -49,6 +56,7 @@
         };
     }
 
+    // Gets the current Jellyfin user ID from ApiClient
     function getCurrentUserId() {
         var api = window.ApiClient;
         if (!api && window.Connections && window.Connections.currentApiClient) {
@@ -58,6 +66,7 @@
         return null;
     }
 
+    // POST JSON to the Sleep Timer API, returns parsed response
     function apiPost(path, body) {
         return fetch(getApiBase() + path, {
             method: 'POST',
@@ -69,6 +78,7 @@
         });
     }
 
+    // DELETE to the Sleep Timer API, returns parsed response
     function apiDelete(path) {
         return fetch(getApiBase() + path, {
             method: 'DELETE',
@@ -79,6 +89,7 @@
         });
     }
 
+    // GET from the Sleep Timer API, returns parsed response
     function apiGet(path) {
         return fetch(getApiBase() + path, {
             headers: authHeaders()
@@ -89,11 +100,12 @@
     }
 
     // ------------------------------------------------------------------
-    // Server sync
+    // Server sync — resume countdown after page refresh
     // ------------------------------------------------------------------
 
-    // Sync with the server on load — if a timer is already running (e.g. after
-    // page refresh), resume the countdown from the server's EndTime.
+    // Sync with the server on load. If a timer is already running (e.g. after
+    // page refresh), resume the countdown from the server's EndTime. If the
+    // timer already expired and the popup is pending, show it immediately.
     function syncFromServer() {
         if (syncedFromServer) return;
         syncedFromServer = true;
@@ -128,9 +140,10 @@
     }
 
     // ------------------------------------------------------------------
-    // Button creation and injection
+    // Button creation and OSD injection
     // ------------------------------------------------------------------
 
+    // Creates the bedtime icon button shown in the player OSD
     function createSleepTimerButton() {
         var btn = document.createElement('button');
         btn.setAttribute('is', 'paper-icon-button-light');
@@ -141,6 +154,7 @@
         return btn;
     }
 
+    // Creates the countdown display that sits next to the button in the OSD
     function createOsdCountdown() {
         var wrapper = document.createElement('div');
         wrapper.className = 'sleepTimerOsdCountdown';
@@ -180,6 +194,8 @@
         return wrapper;
     }
 
+    // Injects the button and countdown into the OSD. Returns true on success,
+    // false if the OSD isn't present yet (caller polls).
     function injectButton() {
         var osd = document.querySelector('.videoOsdBottom');
         if (!osd) return false;
@@ -213,6 +229,7 @@
         return true;
     }
 
+    // Updates the OSD countdown text. Pass 0 to hide it.
     function updateOsdCountdown(remaining) {
         var el = document.getElementById('sleepTimerOsdCountdown');
         if (el) {
@@ -225,9 +242,12 @@
     }
 
     // ------------------------------------------------------------------
-    // Panel UI
+    // Panel UI — the popup settings panel with preset durations
     // ------------------------------------------------------------------
 
+    // Shows the settings panel. If already open, closes it. Auto-closes after
+    // 4 seconds of inactivity. Offers preset durations and, if a timer is
+    // active, extend/cancel controls.
     function showSleepTimerPanel() {
         var existing = document.getElementById('sleepTimerPanel');
         if (existing) {
@@ -348,14 +368,16 @@
     }
 
     // ------------------------------------------------------------------
-    // Timer logic (server is source of truth)
+    // Timer logic — server is source of truth, client mirrors locally
     // ------------------------------------------------------------------
 
+    // Zero-pad a number to 2 digits
     function pad2(n) {
         n = String(n);
         return n.length < 2 ? '0' + n : n;
     }
 
+    // Formats seconds as H:MM:SS or M:SS
     function formatTime(seconds) {
         var h = Math.floor(seconds / 3600);
         var m = Math.floor((seconds % 3600) / 60);
@@ -364,7 +386,7 @@
         return m + ':' + pad2(s);
     }
 
-    // Start a timer: tells the server, then starts the local countdown
+    // Starts a timer: calls the server API, then begins the local countdown
     function startDurationTimer(minutes) {
         var userId = getCurrentUserId();
         if (!userId) {
@@ -387,7 +409,7 @@
         });
     }
 
-    // Extend the timer: tells the server, then updates local countdown
+    // Extends the timer: calls the server API, then adjusts the local countdown
     function extendTimer(additionalMinutes) {
         var userId = getCurrentUserId();
         if (!userId || !currentSessionId) {
@@ -409,6 +431,8 @@
         });
     }
 
+    // Starts the 1-second local countdown interval. When it hits zero,
+    // transitions to the popup.
     function startCountdown() {
         if (sleepTimerInterval) clearInterval(sleepTimerInterval);
         sleepTimerInterval = setInterval(function() {
@@ -425,6 +449,7 @@
         }, 1000);
     }
 
+    // Updates the countdown text in the panel and OSD
     function updateCountdown() {
         if (!sleepTimerEnd) return;
         var remaining = Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000));
@@ -433,7 +458,7 @@
         updateOsdCountdown(remaining);
     }
 
-    // Cancel the timer: tells the server, then clears local state
+    // Cancels the timer: calls the server API, clears local state, removes popup
     function cancelTimer() {
         if (currentSessionId) {
             apiDelete('/SleepTimer/Cancel/' + currentSessionId).catch(function(e) {
@@ -461,6 +486,9 @@
     // "Are you still watching?" popup
     // ------------------------------------------------------------------
 
+    // Shows the popup with a countdown. If the user clicks "Continue Watching",
+    // the timer is cancelled. If they click "Stop Now" or the countdown reaches
+    // zero, playback stops. Escape dismisses the popup as "continue".
     function showStillWatchingPopup(initialSeconds) {
         var existing = document.getElementById('sleepTimerPopup');
         if (existing) existing.remove();
@@ -553,7 +581,7 @@
         });
     }
 
-    // Send popup response to the server
+    // Sends the popup response ("continue" or "stop") to the server API
     function sendPopupResponse(action) {
         var userId = getCurrentUserId();
         if (!userId) return;
@@ -567,7 +595,8 @@
         });
     }
 
-    // Clear local timer state without contacting the server
+    // Clears local timer state without contacting the server.
+    // Used after popup responses and during cleanup.
     function clearLocalTimerState() {
         if (sleepTimerInterval) {
             clearInterval(sleepTimerInterval);
@@ -583,11 +612,11 @@
     }
 
     // ------------------------------------------------------------------
-    // Stop playback (client-side fallback only)
-    // The server is the primary stopper via SendPlaystateCommand.
-    // This is only used when the client needs to stop immediately
-    // (popup timeout) and the server PopupResponse call may not have
-    // propagated yet.
+    // Stop playback — client-side fallback only
+    //
+    // The server is the primary stopper via SendPlaystateCommand. This is
+    // only used when the client needs to stop immediately (popup timeout)
+    // and the server PopupResponse call may not have propagated yet.
     // ------------------------------------------------------------------
 
     function stopPlayback() {
@@ -624,6 +653,7 @@
     // Notifications
     // ------------------------------------------------------------------
 
+    // Shows a Jellyfin toast if available, falls back to console.log
     function notify(message) {
         if (window.require) {
             window.require(['toast'], function(toast) {
@@ -635,7 +665,11 @@
     }
 
     // ------------------------------------------------------------------
-    // Button injection: poll + observe
+    // Button injection — poll + MutationObserver
+    //
+    // The OSD doesn't exist until the user starts playing a video, so we
+    // poll every second and also observe body childList changes. Once the
+    // button is injected, both mechanisms stop.
     // ------------------------------------------------------------------
 
     var injectInterval = setInterval(function() {
@@ -655,16 +689,17 @@
             }
         }
     });
-    // Only observe direct childList changes on body — subtree:true fires on
-    // every DOM mutation in the entire page which is wasteful.
+    // Only observe direct childList changes on body — subtree:true fires
+    // on every DOM mutation in the page, which is wasteful.
     observer.observe(document.body, { childList: true });
     window.__sleepTimerObserver = observer;
 
-    // Also try syncing on script load (covers cases where the OSD is already present)
+    // Also try syncing on script load (covers cases where the OSD is
+    // already present from a previous page navigation)
     syncFromServer();
 
     // ------------------------------------------------------------------
-    // Cleanup function (used by reinstall/uninstall)
+    // Cleanup function — used by reinstall/uninstall and re-injection
     // ------------------------------------------------------------------
 
     window.__sleepTimerCleanup = function() {

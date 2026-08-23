@@ -9,7 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SleepTimer;
 
 /// <summary>
-/// Sleep Timer plugin. Stops playback after a user-defined duration.
+/// Jellyfin Sleep Timer plugin entry point.
+/// Registers the API controller, middleware, and web config page.
+/// Stops playback after a user-defined duration with a grace-period popup.
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
@@ -18,7 +20,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly SleepTimerManager _timerManager;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="Plugin"/> class.
+    /// Wires up the SleepTimerManager and sets the singleton instance.
     /// </summary>
     public Plugin(
         IApplicationPaths applicationPaths,
@@ -40,12 +42,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => new("a3f1c7d2-8e4b-4f6a-9c1d-2b5e8a7f3d60");
 
     /// <summary>
-    /// Gets the singleton instance of the plugin.
+    /// Singleton instance — used by the API controller to access the TimerManager.
     /// </summary>
     public static Plugin? Instance { get; private set; }
 
     /// <summary>
-    /// Gets the timer manager.
+    /// The active timer manager for this server instance.
     /// </summary>
     public SleepTimerManager TimerManager => _timerManager;
 
@@ -62,16 +64,20 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 MenuSection = "Sleep Timer",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html"
             },
+            // Config page helper (no-op — logic is inline in configPage.html)
             new PluginPageInfo
             {
                 Name = "sleep-timer.js",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.sleep-timer.js"
             },
+            // Client-side injection script — adds the OSD button and timer logic
             new PluginPageInfo
             {
                 Name = "sleep-timer-inject.js",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.sleep-timer-inject.js"
             },
+            // Auto-loader injected into Jellyfin's main HTML by the middleware;
+            // checks localStorage and loads sleep-timer-inject.js if installed
             new PluginPageInfo
             {
                 Name = "sleeptimer-autoloader.js",

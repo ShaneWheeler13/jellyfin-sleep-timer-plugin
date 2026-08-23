@@ -1,12 +1,13 @@
 namespace Jellyfin.Plugin.SleepTimer;
 
 /// <summary>
-/// Event args for sleep timer events.
+/// Payload for <see cref="SleepTimerManager.TimerUpdated"/> and
+/// <see cref="SleepTimerManager.TimerExpired"/> events.
 /// </summary>
 public class SleepTimerEventArgs : EventArgs
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="SleepTimerEventArgs"/> class.
+    /// Creates event args wrapping the affected timer.
     /// </summary>
     public SleepTimerEventArgs(SleepTimer timer)
     {
@@ -14,7 +15,7 @@ public class SleepTimerEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets the sleep timer.
+    /// The sleep timer that triggered the event.
     /// </summary>
     public SleepTimer Timer { get; }
 }

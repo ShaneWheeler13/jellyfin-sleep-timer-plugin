@@ -6,11 +6,12 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SleepTimer;
 
 /// <summary>
-/// Manages sleep timers for playback sessions.
-/// The server acts as the source of truth for timer state. The client
-/// calls the API to start/extend/cancel and to report popup responses.
-/// The server monitoring loop acts as a fallback: if the client never
-/// responds to the popup, the server stops playback after the grace period.
+/// Manages sleep timers for all active playback sessions.
+/// The server is the source of truth — the client calls the API for every
+/// action (start, extend, cancel, popup response). A single monitor loop
+/// polls all timers every second and acts as a fallback: if the client
+/// never responds to the popup, the server hard-stops playback after the
+/// grace period expires.
 /// </summary>
 public class SleepTimerManager : IDisposable
 {
@@ -22,18 +23,18 @@ public class SleepTimerManager : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Popup grace period in seconds. The client has this long to respond
-    /// to the "Are you still watching?" popup before the server hard-stops.
+    /// How long the client has to respond to the popup before the server
+    /// hard-stops playback (seconds).
     /// </summary>
     private const int PopupGracePeriodSeconds = 60;
 
     /// <summary>
-    /// Monitor polling interval in milliseconds.
+    /// How often the monitor loop checks all timers (milliseconds).
     /// </summary>
     private const int MonitorIntervalMs = 1000;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SleepTimerManager"/> class.
+    /// Creates the manager, starts the cleanup and monitor timers.
     /// </summary>
     public SleepTimerManager(ISessionManager sessionManager, ILogger logger)
     {
@@ -45,21 +46,22 @@ public class SleepTimerManager : IDisposable
     }
 
     /// <summary>
-    /// Event raised when a timer is started or updated.
+    /// Raised when a timer is started, extended, or cancelled.
     /// </summary>
     public event EventHandler<SleepTimerEventArgs>? TimerUpdated;
 
     /// <summary>
-    /// Event raised when a timer expires and playback is stopped.
+    /// Raised when a timer fully expires and playback is stopped by the server.
     /// </summary>
     public event EventHandler<SleepTimerEventArgs>? TimerExpired;
 
     /// <summary>
-    /// Start a sleep timer for a specific session/user.
+    /// Start (or replace) a sleep timer for a session.
+    /// If a timer already exists for this session, it is overwritten.
     /// </summary>
-    /// <param name="sessionId">The Jellyfin session ID.</param>
-    /// <param name="userId">The user ID.</param>
-    /// <param name="durationMinutes">Timer duration in minutes.</param>
+    /// <param name="sessionId">Jellyfin session ID.</param>
+    /// <param name="userId">Jellyfin user ID.</param>
+    /// <param name="durationMinutes">Countdown length in minutes.</param>
     public void StartTimer(
         string sessionId,
         Guid userId,
@@ -92,9 +94,9 @@ public class SleepTimerManager : IDisposable
     }
 
     /// <summary>
-    /// Cancel the sleep timer for a session.
+    /// Cancel the timer for a session. Removes it from the active set.
     /// </summary>
-    /// <param name="sessionId">The session ID.</param>
+    /// <param name="sessionId">Jellyfin session ID.</param>
     public void CancelTimer(string sessionId)
     {
         if (_timers.TryRemove(sessionId, out var timer))
@@ -106,17 +108,16 @@ public class SleepTimerManager : IDisposable
     }
 
     /// <summary>
-    /// Get the active sleep timer for a session.
+    /// Get the timer for a session, or null if none exists.
     /// </summary>
-    /// <param name="sessionId">The session ID.</param>
-    /// <returns>The sleep timer, or null if none active.</returns>
+    /// <param name="sessionId">Jellyfin session ID.</param>
     public SleepTimer? GetTimer(string sessionId)
     {
         return _timers.TryGetValue(sessionId, out var timer) ? timer : null;
     }
 
     /// <summary>
-    /// Get all active sleep timers.
+    /// Returns a snapshot of all active timers.
     /// </summary>
     public IEnumerable<SleepTimer> GetAllTimers()
     {
@@ -124,10 +125,11 @@ public class SleepTimerManager : IDisposable
     }
 
     /// <summary>
-    /// Extend the sleep timer for a session.
+    /// Add time to an existing timer. If the timer is in PopupPending,
+    /// it reverts to Running and the popup is dismissed.
     /// </summary>
-    /// <param name="sessionId">The session ID.</param>
-    /// <param name="additionalMinutes">Minutes to add.</param>
+    /// <param name="sessionId">Jellyfin session ID.</param>
+    /// <param name="additionalMinutes">Minutes to add to EndTime.</param>
     public void ExtendTimer(string sessionId, int additionalMinutes)
     {
         if (additionalMinutes <= 0)
@@ -153,10 +155,12 @@ public class SleepTimerManager : IDisposable
     }
 
     /// <summary>
-    /// Handle the client's response to the "Are you still watching?" popup.
+    /// Process the client's popup response.
+    /// "continue" cancels the timer (user is still awake).
+    /// "stop" immediately stops playback.
     /// </summary>
-    /// <param name="sessionId">The session ID.</param>
-    /// <param name="action">The user's action: "continue" or "stop".</param>
+    /// <param name="sessionId">Jellyfin session ID.</param>
+    /// <param name="action">"continue" or "stop".</param>
     public void HandlePopupResponse(string sessionId, string action)
     {
         if (!_timers.TryGetValue(sessionId, out var timer))
@@ -183,8 +187,9 @@ public class SleepTimerManager : IDisposable
     }
 
     /// <summary>
-    /// Single monitor callback that checks all timers.
-    /// Replaces the old per-timer polling loop.
+    /// Monitor callback — runs every MonitorIntervalMs. Checks each timer:
+    /// if Running and past EndTime, transitions to PopupPending; if
+    /// PopupPending and past PopupDeadline, hard-stops playback.
     /// </summary>
     private void MonitorAllTimers(object? state)
     {
@@ -226,6 +231,9 @@ public class SleepTimerManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Sends a Stop playstate command to the client via the session manager.
+    /// </summary>
     private async Task StopPlaybackAsync(SleepTimer timer)
     {
         try
@@ -249,12 +257,15 @@ public class SleepTimerManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Periodic cleanup — removes stopped/cancelled timers whose EndTime
+    /// is more than 5 minutes in the past. Frees memory from dead sessions.
+    /// </summary>
     private void CleanupExpiredTimers(object? state)
     {
         var now = DateTime.UtcNow;
         foreach (var kvp in _timers)
         {
-            // Remove timers that have been stopped or cancelled for more than 5 minutes
             if ((kvp.Value.State == SleepTimerState.Stopped || kvp.Value.State == SleepTimerState.Cancelled) &&
                 now > kvp.Value.EndTime.AddMinutes(5))
             {
