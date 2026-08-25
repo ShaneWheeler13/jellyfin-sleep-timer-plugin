@@ -32,16 +32,21 @@ public class SleepTimerMiddleware
 
     /// <summary>
     /// Intercepts HTML responses to the root/web path and injects the auto-loader
-    /// script tag before </body>. Non-HTML and non-root responses pass through unchanged.
+    /// script tag before the closing body tag. Non-HTML and non-root responses pass through unchanged.
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
         // Capture the response body so we can modify it
         var originalBodyStream = context.Response.Body;
 
-        // Only intercept GET requests to the main web entry points
+        // Only intercept GET requests to the main web entry points.
+        // Include /web/index.html and any /web/*.html variant to cover
+        // different Jellyfin serving configurations and SPA reloads.
         var path = context.Request.Path.Value ?? string.Empty;
-        var isWebRoot = path == "/" || path == "/web" || path == "/web/" || path == "/index.html";
+        var isWebRoot = path == "/" || path == "/web" || path == "/web/" ||
+                        path == "/index.html" || path == "/web/index.html" ||
+                        (path.StartsWith("/web/", StringComparison.OrdinalIgnoreCase) &&
+                         path.EndsWith(".html", StringComparison.OrdinalIgnoreCase));
 
         if (!isWebRoot)
         {

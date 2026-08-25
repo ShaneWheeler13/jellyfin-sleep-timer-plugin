@@ -223,7 +223,10 @@
             updateOsdCountdown(Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 1000)));
         }
 
-        // Try server sync once the button is in the OSD
+        // Try server sync once the button is in the OSD.
+        // Reset the guard so each OSD rebuild (e.g. switching shows) re-syncs
+        // from the server, picking up any timer that survived the navigation.
+        syncedFromServer = false;
         syncFromServer();
 
         return true;
@@ -668,30 +671,29 @@
     // Button injection — poll + MutationObserver
     //
     // The OSD doesn't exist until the user starts playing a video, so we
-    // poll every second and also observe body childList changes. Once the
-    // button is injected, both mechanisms stop.
+    // poll every second and also observe DOM changes. The observer stays
+    // alive permanently so it can re-inject the button when the OSD is
+    // destroyed and recreated (e.g. switching shows in Jellyfin's SPA).
     // ------------------------------------------------------------------
 
     var injectInterval = setInterval(function() {
         if (injectButton()) {
             clearInterval(injectInterval);
             injectInterval = null;
-            if (observer) { observer.disconnect(); observer = null; }
         }
     }, 1000);
 
+    // Persistent observer — stays connected for the lifetime of the page.
+    // Re-injects the button whenever the OSD appears and the button is missing.
+    // This handles SPA navigation (switching shows) where the OSD is rebuilt.
     var observer = new MutationObserver(function() {
         if (document.querySelector('.videoOsdBottom') && !document.querySelector('.btnSleepTimer')) {
-            if (injectButton()) {
-                if (injectInterval) { clearInterval(injectInterval); injectInterval = null; }
-                observer.disconnect();
-                observer = null;
-            }
+            injectButton();
         }
     });
-    // Only observe direct childList changes on body — subtree:true fires
-    // on every DOM mutation in the page, which is wasteful.
-    observer.observe(document.body, { childList: true });
+    // subtree:true is required — Jellyfin rebuilds the OSD deep inside the DOM,
+    // not as a direct child of body.
+    observer.observe(document.body, { childList: true, subtree: true });
     window.__sleepTimerObserver = observer;
 
     // Also try syncing on script load (covers cases where the OSD is
