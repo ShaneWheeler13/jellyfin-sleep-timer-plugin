@@ -1,261 +1,149 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-    </head>
-    <body>
-        <div id="SleepTimerConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox,emby-linkbutton">
-            <div data-role="content">
-                <style>
-                    #SleepTimerConfigPage .sleepTimerContainer {
-                        max-width: 680px;
-                        margin: 2rem auto;
-                        padding: 0 1.5rem;
-                    }
-                    #SleepTimerConfigPage h2 {
-                        color: #fff;
-                        margin: 0 0 1.5rem 0;
-                        font-size: 1.5rem;
-                    }
-                    #SleepTimerConfigPage .sleepTimerSection {
-                        margin-bottom: 2rem;
-                    }
+<head>
+    <meta charset="utf-8">
+    <title>Sleep Timer Configuration</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0c0c0c; color: #ddd; padding: 24px; }
+        h2 { color: #fff; margin-bottom: 20px; }
+        .section { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #222; }
+        .section h3 { color: #0084ff; margin-bottom: 12px; font-size: 1.1rem; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: #aaa; }
+        .field input[type="number"] { width: 120px; padding: 8px; background: #1a1a1a; color: #ddd; border: 1px solid #333; border-radius: 6px; font-size: 0.95rem; }
+        .field input[type="checkbox"] { width: 20px; height: 20px; vertical-align: middle; }
+        .field .hint { font-size: 0.8rem; color: #666; margin-top: 4px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95rem; margin-right: 8px; }
+        .btn-primary { background: #0084ff; color: #fff; }
+        .btn-secondary { background: #2a2a2a; color: #ddd; border: 1px solid #333; }
+        .btn-danger { background: #d32f2f; color: #fff; }
+        .status { margin-top: 12px; font-size: 0.9rem; }
+        .status.ok { color: #4caf50; }
+        .status.error { color: #f44336; }
+    </style>
+</head>
+<body>
+    <h2>🌙 Sleep Timer</h2>
 
-                    #SleepTimerConfigPage .sleepTimerInfo {
-                        color: #888;
-                        font-size: 0.85rem;
-                        margin-top: 0.4rem;
-                        line-height: 1.4;
-                    }
-                    #SleepTimerConfigPage .sleepTimerStatus {
-                        padding: 0.8rem 1rem;
-                        border-radius: 6px;
-                        margin-bottom: 1.5rem;
-                        font-size: 0.9rem;
-                    }
-                    #SleepTimerConfigPage .sleepTimerStatus.active {
-                        background: rgba(46,125,50,0.15);
-                        color: #4caf50;
-                        border: 1px solid #2e7d32;
-                    }
-                    #SleepTimerConfigPage .sleepTimerStatus.inactive {
-                        background: rgba(255,255,255,0.05);
-                        color: #888;
-                        border: 1px solid #333;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtnRow {
-                        display: flex;
-                        gap: 0.75rem;
-                        margin-bottom: 0.5rem;
-                    }
-                    /* Margin fallback for browsers without flexbox gap support */
-                    #SleepTimerConfigPage .sleepTimerBtnRow > button + button {
-                        margin-left: 0.75rem;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn {
-                        padding: 0.6rem 1.2rem;
-                        border-radius: 6px;
-                        cursor: pointer;
-                        border: none;
-                        font-size: 0.9rem;
-                        transition: background 0.2s;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn.install {
-                        background: #2e7d32;
-                        color: white;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn.install:hover {
-                        background: #1b5e20;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn.uninstall {
-                        background: #d32f2f;
-                        color: white;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn.uninstall:hover {
-                        background: #b71c1c;
-                    }
-                    #SleepTimerConfigPage .sleepTimerBtn.uninstall:disabled {
-                        background: #444;
-                        color: #888;
-                        cursor: not-allowed;
-                    }
-
-
-                    #SleepTimerConfigPage .sleepTimerDivider {
-                        border: none;
-                        border-top: 1px solid #222;
-                        margin: 2rem 0;
-                    }
-                </style>
-
-                <div class="sleepTimerContainer">
-                    <h2>Sleep Timer</h2>
-
-                    <div id="injectStatus" class="sleepTimerStatus inactive">Sleep button: not installed on this device</div>
-                    <div class="sleepTimerBtnRow">
-                        <button id="installBtn" class="sleepTimerBtn install">Install sleep button</button>
-                        <button id="uninstallBtn" class="sleepTimerBtn uninstall" disabled>Uninstall</button>
-                    </div>
-
-                    <hr class="sleepTimerDivider" />
-
-                    <div class="sleepTimerSection">
-                        <p class="sleepTimerInfo">
-                            The sleep timer adds a button to the video player OSD next to the subtitle button.
-                            Click it to set a duration that stops playback automatically.
-                            When the timer reaches zero, an "Are you still watching?" dialog appears --
-                            playback only stops if the dialog is dismissed or ignored.
-                        </p>
-                    </div>
-
-                </div>
-
-                <script>
-                    // --- API helpers ---
-                    // Resolve the Jellyfin server address from ApiClient or location fallback
-                    function getApiBase() {
-                        // Try multiple sources for the API client
-                        var api = window.ApiClient;
-                        if (!api && window.Connections && window.Connections.currentApiClient) {
-                            api = window.Connections.currentApiClient();
-                        }
-                        if (api && api.serverAddress) {
-                            var addr = api.serverAddress();
-                            if (addr) return addr.replace(/\/+$/, '');
-                        }
-                        // Fallback: derive from current location
-                        if (window.location && window.location.origin) {
-                            return window.location.origin;
-                        }
-                        return '';
-                    }
-
-                    // Extract the auth token from ApiClient
-                    function getAuthToken() {
-                        var api = window.ApiClient;
-                        if (!api && window.Connections && window.Connections.currentApiClient) {
-                            api = window.Connections.currentApiClient();
-                        }
-                        if (api && api.accessToken) return api.accessToken();
-                        return '';
-                    }
-
-                    // Build headers with the Emby auth token for API requests
-                    function authHeaders() {
-                        return {
-                            'Authorization': 'MediaBrowser Token=' + getAuthToken(),
-                            'Content-Type': 'application/json'
-                        };
-                    }
-
-                    // --- Script injection helper ---
-                    // Injects the sleep-timer-inject.js <script> tag into the top window.
-                    // Uses <script src> instead of eval to avoid CSP issues.
-                    function injectScript() {
-                        var target = null;
-                        try {
-                            target = window.top;
-                            // Test access — this will throw if cross-origin
-                            var _ = target.document;
-                        } catch (e) {
-                            console.log('[SleepTimer] Cannot access window.top, using current window');
-                            target = window;
-                        }
-                        // Remove previous inject script
-                        var old = target.document.getElementById('sleepTimerInjectScript');
-                        if (old) old.remove();
-                        var s = target.document.createElement('script');
-                        s.id = 'sleepTimerInjectScript';
-                        s.src = '/web/ConfigurationPage?name=sleep-timer-inject.js';
-                        s.onload = function() { console.log('[SleepTimer] Inject script loaded'); };
-                        s.onerror = function() { console.error('[SleepTimer] Failed to load inject script'); };
-                        target.document.head.appendChild(s);
-                    }
-
-                    // --- Install / Uninstall ---
-                    // Installs are per-device via localStorage. The middleware-injected
-                    // auto-loader checks this flag on every page load.
-                    var INJECT_KEY = 'sleeptimer_installed';
-
-                    // Updates the install status banner and button states
-                    function updateInstallUI() {
-                        var installed = localStorage.getItem(INJECT_KEY) === 'true';
-                        var status = document.getElementById('injectStatus');
-                        var installBtn = document.getElementById('installBtn');
-                        var uninstallBtn = document.getElementById('uninstallBtn');
-
-                        if (installed) {
-                            status.className = 'sleepTimerStatus active';
-                            status.textContent = 'Sleep button: installed on this device';
-                            installBtn.textContent = 'Reinstall sleep button';
-                            uninstallBtn.disabled = false;
-                        } else {
-                            status.className = 'sleepTimerStatus inactive';
-                            status.textContent = 'Sleep button: not installed on this device';
-                            installBtn.textContent = 'Install sleep button';
-                            uninstallBtn.disabled = true;
-                        }
-                    }
-
-                    // Runs cleanup if the inject script provided one, removes the
-                    // script tag, and clears the localStorage install flag.
-                    function clearInjection() {
-                        // Run cleanup if the inject script provided one
-                        var target = window;
-                        try { target = window.top; } catch (e) { /* same-origin fallback */ }
-                        if (target.__sleepTimerCleanup) {
-                            try { target.__sleepTimerCleanup(); } catch (e) {
-                                console.error('[SleepTimer] Cleanup error:', e);
-                            }
-                        }
-                        // Remove the script tag
-                        var old = target.document.getElementById('sleepTimerInjectScript');
-                        if (old) old.remove();
-                        localStorage.removeItem(INJECT_KEY);
-                    }
-
-                    // Shows a Jellyfin toast if available
-                    function notify(message) {
-                        if (window.require) {
-                            window.require(['toast'], function(toast) { toast(message); });
-                        }
-                    }
-
-                    // Wire up button listeners. Retries on setTimeout if the DOM
-                    // isn't ready yet.
-                    function initButtons() {
-                        var installBtn = document.getElementById('installBtn');
-                        var uninstallBtn = document.getElementById('uninstallBtn');
-                        if (!installBtn) {
-                            // Page not ready yet, retry shortly
-                            setTimeout(initButtons, 100);
-                            return;
-                        }
-
-                        installBtn.addEventListener('click', function() {
-                            // Clear old install first, then fresh install
-                            clearInjection();
-                            localStorage.setItem(INJECT_KEY, 'true');
-                            injectScript();
-                            updateInstallUI();
-                            notify('Sleep button installed! Play a video to see it.');
-                        });
-
-                        uninstallBtn.addEventListener('click', function() {
-                            clearInjection();
-                            updateInstallUI();
-                            notify('Sleep button uninstalled');
-                        });
-                    }
-
-                    // --- Init ---
-                    // Auto-loading on every page is handled by server-side middleware
-                    // that injects sleeptimer-autoloader.js into Jellyfin's main HTML.
-                    // This persists across server restarts.
-                    initButtons();
-                    updateInstallUI();
-                </script>
-            </div>
+    <div class="section">
+        <h3>Server Settings</h3>
+        <div class="field">
+            <label for="gracePeriod">Popup Grace Period (seconds)</label>
+            <input type="number" id="gracePeriod" min="0" max="300" value="60">
+            <div class="hint">How long the "Are you still watching?" popup stays before auto-stopping. Set to 0 to disable the popup entirely.</div>
         </div>
-    </body>
+        <div class="field">
+            <label for="enablePopup">Enable "Are you still watching?" Popup</label>
+            <input type="checkbox" id="enablePopup" checked>
+            <div class="hint">When unchecked, playback stops immediately when the timer expires with no popup.</div>
+        </div>
+        <div class="field">
+            <label for="defaultDuration">Default Duration (minutes)</label>
+            <input type="number" id="defaultDuration" min="1" max="480" value="30">
+            <div class="hint">Default timer duration. Currently informational — the client always sends an explicit duration.</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">Save Settings</button>
+        <span id="configStatus" class="status"></span>
+    </div>
+
+    <div class="section">
+        <h3>Per-Device Button Installation</h3>
+        <p style="font-size:0.9rem;color:#aaa;margin-bottom:16px">Install the sleep timer button on this device's video player. The button persists across server restarts and page reloads.</p>
+        <button class="btn btn-primary" onclick="installButton()">Install sleep button</button>
+        <button class="btn btn-danger" onclick="uninstallButton()">Uninstall</button>
+        <span id="installStatus" class="status"></span>
+    </div>
+
+    <script src="sleep-timer.js"></script>
+    <script>
+        // Load current config values from the server
+        function loadConfig() {
+            var api = window.ApiClient || (window.Connections && window.Connections.currentApiClient ? window.Connections.currentApiClient() : null);
+            if (!api) return;
+
+            var base = api.serverAddress().replace(/\/+$/, '');
+            var headers = { 'X-Emby-Token': api.accessToken() };
+
+            // Fetch config from the plugin's config endpoint
+            fetch(base + '/plugins/SleepTimer/Configuration', { headers: headers })
+                .then(function(r) { return r.json(); })
+                .then(function(cfg) {
+                    if (cfg) {
+                        document.getElementById('gracePeriod').value = cfg.PopupGracePeriodSeconds ?? 60;
+                        document.getElementById('enablePopup').checked = cfg.EnablePopup !== false;
+                        document.getElementById('defaultDuration').value = cfg.DefaultDurationMinutes ?? 30;
+                    }
+                })
+                .catch(function(e) {
+                    console.error('[SleepTimer] Failed to load config:', e);
+                });
+        }
+
+        function saveConfig() {
+            var api = window.ApiClient || (window.Connections && window.Connections.currentApiClient ? window.Connections.currentApiClient() : null);
+            if (!api) {
+                showStatus('configStatus', 'No API connection', 'error');
+                return;
+            }
+
+            var base = api.serverAddress().replace(/\/+$/, '');
+            var body = {
+                PopupGracePeriodSeconds: parseInt(document.getElementById('gracePeriod').value, 10) || 60,
+                EnablePopup: document.getElementById('enablePopup').checked,
+                DefaultDurationMinutes: parseInt(document.getElementById('defaultDuration').value, 10) || 30
+            };
+
+            fetch(base + '/plugins/SleepTimer/Configuration', {
+                method: 'POST',
+                headers: {
+                    'X-Emby-Token': api.accessToken(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            })
+            .then(function(r) {
+                if (r.ok) {
+                    showStatus('configStatus', 'Settings saved', 'ok');
+                } else {
+                    showStatus('configStatus', 'Save failed (HTTP ' + r.status + ')', 'error');
+                }
+            })
+            .catch(function(e) {
+                showStatus('configStatus', 'Save failed: ' + e.message, 'error');
+            });
+        }
+
+        function installButton() {
+            localStorage.setItem('sleeptimer_installed', 'true');
+            showStatus('installStatus', 'Sleep button installed. Refresh any open video pages to see it.', 'ok');
+        }
+
+        function uninstallButton() {
+            localStorage.removeItem('sleeptimer_installed');
+            // Also clean up the DOM immediately
+            var btn = document.querySelector('.btnSleepTimer');
+            if (btn) btn.remove();
+            var countdown = document.querySelector('.sleepTimerOsdCountdown');
+            if (countdown) countdown.remove();
+            showStatus('installStatus', 'Sleep button uninstalled from this device.', 'ok');
+        }
+
+        function showStatus(id, msg, type) {
+            var el = document.getElementById(id);
+            el.textContent = msg;
+            el.className = 'status ' + type;
+            setTimeout(function() { el.textContent = ''; }, 5000);
+        }
+
+        // Check current install state on load
+        (function() {
+            if (localStorage.getItem('sleeptimer_installed') === 'true') {
+                showStatus('installStatus', 'Sleep button is currently installed on this device.', 'ok');
+            }
+        })();
+
+        // Load server config on page load
+        loadConfig();
+    </script>
+</body>
 </html>

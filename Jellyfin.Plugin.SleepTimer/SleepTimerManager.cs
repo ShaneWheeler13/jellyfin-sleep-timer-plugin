@@ -24,9 +24,17 @@ public class SleepTimerManager : IDisposable
 
     /// <summary>
     /// How long the client has to respond to the popup before the server
-    /// hard-stops playback (seconds).
+    /// hard-stops playback (seconds). Read from PluginConfiguration —
+    /// defaults to 60 if not configured. Set to 0 to skip the popup
+    /// entirely and stop playback immediately.
     /// </summary>
-    private const int PopupGracePeriodSeconds = 60;
+    private int _popupGracePeriodSeconds = 60;
+
+    /// <summary>
+    /// Whether the "Are you still watching?" popup is enabled.
+    /// When false, playback stops immediately when the timer expires.
+    /// </summary>
+    private bool _enablePopup = true;
 
     /// <summary>
     /// How often the monitor loop checks all timers (milliseconds).
@@ -43,6 +51,19 @@ public class SleepTimerManager : IDisposable
         _cleanupTimer = new Timer(CleanupExpiredTimers, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
         // Single monitor timer checks all active timers — no per-timer polling loops
         _monitorTimer = new Timer(MonitorAllTimers, null, TimeSpan.FromMilliseconds(MonitorIntervalMs), TimeSpan.FromMilliseconds(MonitorIntervalMs));
+    }
+
+    /// <summary>
+    /// Updates the runtime configuration values from PluginConfiguration.
+    /// Called by Plugin.cs when the config is loaded or changed.
+    /// </summary>
+    /// <param name="gracePeriodSeconds">Popup grace period in seconds. 0 = no popup.</param>
+    /// <param name="enablePopup">Whether the popup should be shown at all.</param>
+    public void UpdateConfiguration(int gracePeriodSeconds, bool enablePopup)
+    {
+        _popupGracePeriodSeconds = gracePeriodSeconds;
+        _enablePopup = enablePopup;
+        _logger.LogInformation("Sleep Timer configuration updated: grace period = {Seconds}s, popup enabled = {Enabled}", gracePeriodSeconds, enablePopup);
     }
 
     /// <summary>
@@ -188,8 +209,9 @@ public class SleepTimerManager : IDisposable
 
     /// <summary>
     /// Monitor callback — runs every MonitorIntervalMs. Checks each timer:
-    /// if Running and past EndTime, transitions to PopupPending; if
-    /// PopupPending and past PopupDeadline, hard-stops playback.
+    /// if Running and past EndTime, transitions to PopupPending (or stops
+    /// immediately if popup is disabled); if PopupPending and past
+    /// PopupDeadline, hard-stops playback.
     /// </summary>
     private void MonitorAllTimers(object? state)
     {
@@ -208,14 +230,28 @@ public class SleepTimerManager : IDisposable
                 continue;
             }
 
-            // Timer is running and has reached zero → transition to popup-pending
+            // Timer is running and has reached zero
             if (timer.State == SleepTimerState.Running && now >= timer.EndTime)
             {
-                timer.State = SleepTimerState.PopupPending;
-                timer.PopupDeadline = now.AddSeconds(PopupGracePeriodSeconds);
-                _logger.LogInformation("Sleep timer expired for session {SessionId} — popup pending (grace period: {Seconds}s)",
-                    timer.SessionId, PopupGracePeriodSeconds);
-                TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
+                if (_enablePopup && _popupGracePeriodSeconds > 0)
+                {
+                    // Transition to popup-pending state
+                    timer.State = SleepTimerState.PopupPending;
+                    timer.PopupDeadline = now.AddSeconds(_popupGracePeriodSeconds);
+                    _logger.LogInformation("Sleep timer expired for session {SessionId} — popup pending (grace period: {Seconds}s)",
+                        timer.SessionId, _popupGracePeriodSeconds);
+                    TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
+                }
+                else
+                {
+                    // Popup disabled — stop playback immediately
+                    timer.State = SleepTimerState.Stopped;
+                    timer.IsExpired = true;
+                    _logger.LogInformation("Sleep timer expired for session {SessionId} — stopping playback (popup disabled)", timer.SessionId);
+                    _ = StopPlaybackAsync(timer);
+                    _timers.TryRemove(timer.SessionId, out _);
+                    TimerExpired?.Invoke(this, new SleepTimerEventArgs(timer));
+                }
             }
 
             // Popup grace period has expired → hard stop playback

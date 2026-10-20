@@ -21,6 +21,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     /// <summary>
     /// Wires up the SleepTimerManager and sets the singleton instance.
+    /// Applies the current PluginConfiguration to the timer manager.
+    /// Subscribes to config changes so runtime behavior updates without a restart.
     /// </summary>
     public Plugin(
         IApplicationPaths applicationPaths,
@@ -33,6 +35,32 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _sessionManager = sessionManager;
         _logger = logger;
         _timerManager = new SleepTimerManager(sessionManager, logger);
+
+        // Apply current configuration to the timer manager
+        ApplyConfigurationToManager();
+
+        // Subscribe to config changes so settings take effect immediately
+        ConfigurationChanged += OnConfigurationChangedHandler;
+    }
+
+    /// <summary>
+    /// Pushes the current PluginConfiguration values into the SleepTimerManager.
+    /// Called on startup and whenever config is saved.
+    /// </summary>
+    private void ApplyConfigurationToManager()
+    {
+        _timerManager.UpdateConfiguration(
+            Configuration.PopupGracePeriodSeconds,
+            Configuration.EnablePopup);
+    }
+
+    /// <summary>
+    /// Event handler for ConfigurationChanged — re-applies settings
+    /// to the timer manager so runtime behavior updates without a restart.
+    /// </summary>
+    private void OnConfigurationChangedHandler(object? sender, BasePluginConfiguration e)
+    {
+        ApplyConfigurationToManager();
     }
 
     /// <inheritdoc />
