@@ -1,7 +1,7 @@
 ---
 name: "Sleep Timer"
 guid: "a3f1c7d2-8e4b-4f6a-9c1d-2b5e8a7f3d60"
-version: "2.0.0.0"
+version: "2.0.1.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Sleep timer for Jellyfin playback"
