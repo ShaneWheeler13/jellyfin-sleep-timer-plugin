@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "2.1.0.0",
+                "changelog": "Volume fade: playback ramps from its current level to zero over the popup grace period instead of cutting out abruptly, then restores the original volume. Off by default; enable via the new \"Fade volume out before stopping\" setting. Fade is driven by timeupdate so it survives background-tab throttling. Popup countdown now respects the configured grace period instead of assuming 60 seconds.",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/ShaneWheeler13/jellyfin-sleep-timer-plugin/releases/download/v2.1.0/sleep-timer-2.1.0.zip",
+                "checksum": "c214e848b5fc60b40bcd5be59c5bce5e",
+                "timestamp": "2026-10-31T21:18:30Z"
+            },
+            {
                 "version": "2.0.1.0",
                 "changelog": "Fix blank settings page. Restored the Jellyfin dashboard page structure (data-role=page, pluginConfigurationPage) that the SPA router requires. Install/uninstall buttons now work. Server settings (grace period, popup toggle, default duration) now use Jellyfin built-in /Plugins/{guid}/Configuration API instead of a non-existent custom endpoint.",
                 "targetAbi": "12.0.0.0",
