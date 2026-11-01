@@ -48,7 +48,9 @@ public class SleepTimerService : ControllerBase
             t.DurationMinutes,
             State = t.State.ToString(),
             RemainingSeconds = Math.Max(0, (int)t.Remaining.TotalSeconds),
-            PopupRemainingSeconds = t.PopupRemaining.HasValue ? Math.Max(0, (int)t.PopupRemaining.Value.TotalSeconds) : (int?)null
+            PopupRemainingSeconds = t.PopupRemaining.HasValue ? Math.Max(0, (int)t.PopupRemaining.Value.TotalSeconds) : (int?)null,
+            t.FadeEnabled,
+            t.FadeDurationSeconds
         });
 
         return Ok(timers);
@@ -84,7 +86,9 @@ public class SleepTimerService : ControllerBase
             timer.DurationMinutes,
             State = timer.State.ToString(),
             RemainingSeconds = Math.Max(0, (int)timer.Remaining.TotalSeconds),
-            PopupRemainingSeconds = timer.PopupRemaining.HasValue ? Math.Max(0, (int)timer.PopupRemaining.Value.TotalSeconds) : (int?)null
+            PopupRemainingSeconds = timer.PopupRemaining.HasValue ? Math.Max(0, (int)timer.PopupRemaining.Value.TotalSeconds) : (int?)null,
+            timer.FadeEnabled,
+            timer.FadeDurationSeconds
         });
     }
 
@@ -124,7 +128,9 @@ public class SleepTimerService : ControllerBase
             timer.DurationMinutes,
             State = timer.State.ToString(),
             RemainingSeconds = Math.Max(0, (int)timer.Remaining.TotalSeconds),
-            PopupRemainingSeconds = timer.PopupRemaining.HasValue ? Math.Max(0, (int)timer.PopupRemaining.Value.TotalSeconds) : (int?)null
+            PopupRemainingSeconds = timer.PopupRemaining.HasValue ? Math.Max(0, (int)timer.PopupRemaining.Value.TotalSeconds) : (int?)null,
+            timer.FadeEnabled,
+            timer.FadeDurationSeconds
         });
     }
 

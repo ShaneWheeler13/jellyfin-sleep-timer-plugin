@@ -22,9 +22,18 @@
     var sleepTimerEnd = null;             // epoch ms, synced from server EndTime
     var currentSessionId = null;          // session ID from server
     var popupShown = false;               // true while the popup is visible
-    var popupTimeoutMs = 60000;           // grace period before auto-stop (matches server)
+    var popupTimeoutMs = 60000;           // fallback grace period if server value unavailable
     var syncedFromServer = false;         // guard so syncFromServer runs once
     var mutationObserver = null;          // MutationObserver for OSD detection
+    var fadeInterval = null;              // backstop interval handle for the volume fade
+    var fadeStartMs = null;               // wall-clock start of the fade (epoch ms)
+    var fadeTotalMs = null;               // total fade length (ms)
+    var fadeStartVolume = null;           // volume the fade begins from
+    var originalVolume = null;            // volume captured when the fade begins
+    var fadeRestored = false;             // guard so we only restore volume once
+    var fadeMedia = null;                 // media element the fade is bound to
+    var fadeTimeUpdateHandler = null;     // timeupdate listener (cleared on restore)
+    var fadeVerifyLogged = false;         // one-shot log if volume gets reverted
 
     // ------------------------------------------------------------------
     // API helpers — thin wrappers around fetch with auth headers
@@ -544,9 +553,39 @@
                 popupShown = true;
                 clearInterval(sleepTimerInterval);
                 sleepTimerInterval = null;
-                showStillWatchingPopup(60);
+                // Duration comes from the server so the popup and the volume
+                // fade always use the configured grace period.
+                promptExpiry();
             }
         }, 1000);
+    }
+
+    // Asks the server how long the grace period is, then shows the popup.
+    // Falls back to popupTimeoutMs when the server cannot be reached.
+    function promptExpiry() {
+        var userId = getCurrentUserId();
+        if (!userId) {
+            showStillWatchingPopup(Math.round(popupTimeoutMs / 1000), null);
+            return;
+        }
+
+        apiGet('/SleepTimer/TimerByUser/' + userId)
+            .then(function(data) {
+                if (data && data.State === 'PopupPending' && data.PopupRemainingSeconds > 0) {
+                    currentSessionId = data.SessionId || currentSessionId;
+                    showStillWatchingPopup(data.PopupRemainingSeconds, data.FadeDurationSeconds);
+                } else if (data && data.State === 'PopupPending') {
+                    // Grace already nearly over — nothing to show
+                    return;
+                } else {
+                    // Server has no timer (cancelled elsewhere) — do nothing
+                    return;
+                }
+            })
+            .catch(function(e) {
+                console.error('[SleepTimer] Could not read grace period, using fallback:', e);
+                showStillWatchingPopup(Math.round(popupTimeoutMs / 1000), null);
+            });
     }
 
     // ------------------------------------------------------------------
@@ -556,7 +595,7 @@
     // Shows the "Are you still watching?" dialog with a countdown.
     // The user can continue watching or stop now. If they don't respond
     // within the timeout, the server will hard-stop playback as a fallback.
-    function showStillWatchingPopup(secondsRemaining) {
+    function showStillWatchingPopup(secondsRemaining, fadeSeconds) {
         var existing = document.getElementById('sleepTimerPopup');
         if (existing) existing.remove();
 
@@ -595,6 +634,13 @@
 
         document.body.appendChild(popup);
 
+        // Begin the volume fade (if the server says one is active).
+        // The fade runs in parallel with the countdown so audio is already
+        // gone by the time playback stops.
+        if (fadeSeconds && fadeSeconds > 0) {
+            startVolumeFade(fadeSeconds);
+        }
+
         function closePopup() {
             if (popupInterval) clearInterval(popupInterval);
             var p = document.getElementById('sleepTimerPopup');
@@ -615,6 +661,7 @@
 
         document.getElementById('stContinueBtn').addEventListener('click', function() {
             reportResponse('continue');
+            restoreVolume();
             sleepTimerEnd = null;
             popupShown = false;
             currentSessionId = null;
@@ -623,6 +670,8 @@
         });
 
         document.getElementById('stStopBtn').addEventListener('click', function() {
+            // Restore first so the next session is not left muted.
+            restoreVolume();
             reportResponse('stop');
             sleepTimerEnd = null;
             popupShown = false;
@@ -636,6 +685,7 @@
             if (e.key === 'Escape') {
                 e.preventDefault();
                 reportResponse('continue');
+                restoreVolume();
                 sleepTimerEnd = null;
                 popupShown = false;
                 currentSessionId = null;
@@ -652,11 +702,159 @@
             var cdEl = document.getElementById('stPopupCountdown');
             if (cdEl) cdEl.textContent = remaining;
             if (remaining <= 0) {
+                // Timer ran out. Restore volume before the server hard-stops
+                // so the next session is not left muted.
+                restoreVolume();
                 closePopup();
                 // Server will hard-stop as fallback — no need to send another
                 // response; the server's monitor loop handles this.
             }
         }, 1000);
+    }
+
+    // ------------------------------------------------------------------
+    // Volume fade
+    // ------------------------------------------------------------------
+
+    // Resolves the active media element. Jellyfin's web player renders a
+    // <video> or <audio> tag; we search the top window to cover the player
+    // living outside the config page iframe.
+    function getMediaElement() {
+        var target = window;
+        try { target = window.top; } catch (e) { target = window; }
+        if (!target || !target.document) return null;
+        return target.document.querySelector('video.htmlvideoplayer') ||
+               target.document.querySelector('video') ||
+               target.document.querySelector('audio');
+    }
+
+    // Fades the media element's volume from its current level to 0 over
+    // durationSeconds.
+    //
+    // The ramp is driven two ways so it survives background-tab throttling:
+    //   1. timeupdate — fires from the media pipeline (~4x/sec while audio
+    //      plays) and is not subject to the JS timer throttle that setInterval
+    //      hits in a background tab. This is the primary driver.
+    //   2. A 1s setInterval backstop, in case timeupdate stalls.
+    //
+    // Both paths compute volume from elapsed wall-clock time rather than a
+    // tick counter, so a throttled tab jumps straight to the correct level
+    // instead of falling behind. Both paths are idempotent, so double-firing
+    // is harmless.
+    //
+    // No-op if no media element is found, which degrades gracefully to the
+    // previous abrupt-stop behavior.
+    function startVolumeFade(durationSeconds) {
+        var media = getMediaElement();
+        if (!media) {
+            console.warn('[SleepTimer] Volume fade skipped — no media element found');
+            return;
+        }
+
+        // Snapshot the user's volume so we can put it back afterwards.
+        if (originalVolume === null) {
+            originalVolume = typeof media.volume === 'number' ? media.volume : 1;
+            fadeRestored = false;
+        }
+
+        // Reset any in-flight fade before starting a new one.
+        stopFadeEngine();
+
+        fadeMedia = media;
+        fadeStartMs = Date.now();
+        fadeTotalMs = Math.max(1, durationSeconds * 1000);
+        fadeStartVolume = originalVolume;
+
+        // Primary driver: media-pipeline driven, immune to timer throttling.
+        fadeTimeUpdateHandler = function() { applyFadeStep(); };
+        try {
+            media.addEventListener('timeupdate', fadeTimeUpdateHandler);
+        } catch (e) {
+            console.warn('[SleepTimer] Could not attach timeupdate listener:', e);
+        }
+
+        // Backstop driver: covers the case where timeupdate stalls.
+        fadeInterval = setInterval(applyFadeStep, 1000);
+
+        // Apply the first step immediately so the ramp starts without a delay.
+        applyFadeStep();
+    }
+
+    // Applies one fade step computed from elapsed wall-clock time.
+    // Safe to call any number of times; finishes and detaches at the end.
+    function applyFadeStep() {
+        if (fadeStartMs === null || !fadeMedia) return;
+
+        var elapsed = Date.now() - fadeStartMs;
+        var progress = elapsed / fadeTotalMs;
+        if (progress > 1) progress = 1;
+
+        var nextVolume = fadeStartVolume * (1 - progress);
+        if (nextVolume < 0) nextVolume = 0;
+
+        try {
+            fadeMedia.volume = nextVolume;
+        } catch (e) {
+            console.error('[SleepTimer] Volume fade error:', e);
+            stopFadeEngine();
+            return;
+        }
+
+        // Detect the player silently reverting our value. Log once so it shows
+        // up in the console without spamming every tick.
+        if (!fadeVerifyLogged && progress > 0.1 && progress < 0.9) {
+            var actual = fadeMedia.volume;
+            if (Math.abs(actual - nextVolume) > 0.05) {
+                fadeVerifyLogged = true;
+                console.warn('[SleepTimer] Player is overriding fade volume (wanted ' +
+                    nextVolume.toFixed(2) + ', got ' + actual.toFixed(2) + ')');
+            }
+        }
+
+        if (progress >= 1) {
+            stopFadeEngine();
+        }
+    }
+
+    // Detaches the fade drivers without changing volume.
+    function stopFadeEngine() {
+        if (fadeInterval) {
+            clearInterval(fadeInterval);
+            fadeInterval = null;
+        }
+
+        if (fadeTimeUpdateHandler && fadeMedia) {
+            try {
+                fadeMedia.removeEventListener('timeupdate', fadeTimeUpdateHandler);
+            } catch (e) { /* element may be gone */ }
+        }
+
+        fadeTimeUpdateHandler = null;
+        fadeMedia = null;
+        fadeStartMs = null;
+        fadeTotalMs = null;
+        fadeStartVolume = null;
+    }
+
+    // Restores the volume captured when the fade started. Safe to call
+    // multiple times — only the first call does any work.
+    function restoreVolume() {
+        stopFadeEngine();
+
+        if (originalVolume === null || fadeRestored) return;
+
+        var media = getMediaElement();
+        if (media) {
+            try {
+                media.volume = originalVolume;
+            } catch (e) {
+                console.error('[SleepTimer] Volume restore error:', e);
+            }
+        }
+
+        fadeRestored = true;
+        originalVolume = null;
+        fadeVerifyLogged = false;
     }
 
     // ------------------------------------------------------------------
@@ -731,6 +929,10 @@
     // ------------------------------------------------------------------
 
     window.__sleepTimerCleanup = function() {
+        // Put the volume back before tearing anything down, otherwise a
+        // mid-fade cleanup would leave the player muted.
+        try { restoreVolume(); } catch (e) { /* best effort */ }
+
         if (sleepTimerInterval) {
             clearInterval(sleepTimerInterval);
             sleepTimerInterval = null;
@@ -738,6 +940,14 @@
         if (mutationObserver) {
             mutationObserver.disconnect();
             mutationObserver = null;
+        }
+        if (pageHideHandler) {
+            try { window.removeEventListener('pagehide', pageHideHandler); } catch (e) { /* noop */ }
+            pageHideHandler = null;
+        }
+        if (visibilityHandler) {
+            try { document.removeEventListener('visibilitychange', visibilityHandler); } catch (e) { /* noop */ }
+            visibilityHandler = null;
         }
         var btn = document.querySelector('.btnSleepTimer');
         if (btn) btn.remove();
@@ -752,6 +962,33 @@
         popupShown = false;
         syncedFromServer = false;
     };
+
+    // ------------------------------------------------------------------
+    // Volume restore safety nets
+    // ------------------------------------------------------------------
+
+    // Volume restore has to happen client-side — Jellyfin 12 exposes no
+    // server-side volume API (PlaystateCommand has no SetVolume member, and
+    // ISessionManager offers only SendPlaystateCommand). So we cover every
+    // plausible exit path from the browser side.
+
+    // Leaving the page mid-fade: restore synchronously before unload.
+    var pageHideHandler = function() {
+        try { restoreVolume(); } catch (e) { /* best effort */ }
+    };
+
+    // Tab hidden mid-fade: if the fade already completed, the volume is 0 and
+    // nothing will tick again until the tab returns. Restore on hide so the
+    // viewer never comes back to a silent player.
+    var visibilityHandler = function() {
+        if (document.visibilityState === 'hidden' && originalVolume !== null) {
+            try { restoreVolume(); } catch (e) { /* best effort */ }
+        }
+    };
+
+    try { window.addEventListener('pagehide', pageHideHandler); } catch (e) { /* noop */ }
+    try { document.addEventListener('visibilitychange', visibilityHandler); } catch (e) { /* noop */ }
+
 
     // ------------------------------------------------------------------
     // Boot — start watching for the OSD

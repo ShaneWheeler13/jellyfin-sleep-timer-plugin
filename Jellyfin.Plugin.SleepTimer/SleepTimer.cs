@@ -50,6 +50,20 @@ public class SleepTimer
     public DateTime? PopupDeadline { get; set; }
 
     /// <summary>
+    /// Whether the volume fade is active for this timer's popup cycle.
+    /// Set when the timer transitions to PopupPending, based on the
+    /// EnableVolumeFade plugin setting at that moment.
+    /// </summary>
+    public bool FadeEnabled { get; set; }
+
+    /// <summary>
+    /// Length of the volume fade in seconds. Captured at the moment the
+    /// timer transitions to PopupPending so a mid-fade config change does
+    /// not leave the client fading against a moving target.
+    /// </summary>
+    public int FadeDurationSeconds { get; set; }
+
+    /// <summary>
     /// Time left before the countdown reaches zero. Negative if already expired.
     /// </summary>
     public TimeSpan Remaining => EndTime - DateTime.UtcNow;

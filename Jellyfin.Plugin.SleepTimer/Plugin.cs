@@ -51,7 +51,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         _timerManager.UpdateConfiguration(
             Configuration.PopupGracePeriodSeconds,
-            Configuration.EnablePopup);
+            Configuration.EnablePopup,
+            Configuration.EnableVolumeFade);
     }
 
     /// <summary>

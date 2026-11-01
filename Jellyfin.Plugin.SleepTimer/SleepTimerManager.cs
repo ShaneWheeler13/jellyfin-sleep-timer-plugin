@@ -37,9 +37,23 @@ public class SleepTimerManager : IDisposable
     private bool _enablePopup = true;
 
     /// <summary>
+    /// Whether playback volume should fade to zero over the grace period
+    /// before playback stops.
+    /// </summary>
+    private bool _enableVolumeFade;
+
+    /// <summary>
     /// How often the monitor loop checks all timers (milliseconds).
     /// </summary>
     private const int MonitorIntervalMs = 1000;
+
+    /// <summary>
+    /// The fade completes this many seconds before the server hard-stop,
+    /// so a slightly late client tick cannot leave audio audible at the
+    /// moment playback ends. Clamped so short grace periods still get a
+    /// usable fade.
+    /// </summary>
+    private const int FadeLeadSeconds = 2;
 
     /// <summary>
     /// Creates the manager, starts the cleanup and monitor timers.
@@ -59,11 +73,38 @@ public class SleepTimerManager : IDisposable
     /// </summary>
     /// <param name="gracePeriodSeconds">Popup grace period in seconds. 0 = no popup.</param>
     /// <param name="enablePopup">Whether the popup should be shown at all.</param>
-    public void UpdateConfiguration(int gracePeriodSeconds, bool enablePopup)
+    /// <param name="enableVolumeFade">Whether volume should fade before stopping.</param>
+    public void UpdateConfiguration(int gracePeriodSeconds, bool enablePopup, bool enableVolumeFade)
     {
         _popupGracePeriodSeconds = gracePeriodSeconds;
         _enablePopup = enablePopup;
-        _logger.LogInformation("Sleep Timer configuration updated: grace period = {Seconds}s, popup enabled = {Enabled}", gracePeriodSeconds, enablePopup);
+        _enableVolumeFade = enableVolumeFade;
+        _logger.LogInformation(
+            "Sleep Timer configuration updated: grace period = {Seconds}s, popup enabled = {Popup}, volume fade = {Fade}",
+            gracePeriodSeconds,
+            enablePopup,
+            enableVolumeFade);
+    }
+
+    /// <summary>
+    /// Computes the fade duration for a given grace period.
+    /// The fade mirrors the popup duration but ends <see cref="FadeLeadSeconds"/>
+    /// early so playback always stops on silence. Returns 0 when no fade should run.
+    /// </summary>
+    /// <param name="gracePeriodSeconds">Configured popup grace period.</param>
+    /// <returns>Fade length in seconds, or 0 if the fade is not applicable.</returns>
+    private static int ComputeFadeDuration(int gracePeriodSeconds)
+    {
+        if (gracePeriodSeconds <= 0)
+        {
+            return 0;
+        }
+
+        // Leave a small lead so the fade finishes before the hard stop.
+        // For very short grace periods, take half the window instead of
+        // producing a zero-length fade.
+        var lead = Math.Min(FadeLeadSeconds, gracePeriodSeconds / 2);
+        return Math.Max(1, gracePeriodSeconds - lead);
     }
 
     /// <summary>
@@ -167,6 +208,8 @@ public class SleepTimerManager : IDisposable
             {
                 timer.State = SleepTimerState.Running;
                 timer.PopupDeadline = null;
+                timer.FadeEnabled = false;
+                timer.FadeDurationSeconds = 0;
             }
 
             _logger.LogInformation("Sleep timer extended for session {SessionId}: +{Minutes} minutes (new end: {EndTime:HH:mm:ss} UTC)",
@@ -238,8 +281,20 @@ public class SleepTimerManager : IDisposable
                     // Transition to popup-pending state
                     timer.State = SleepTimerState.PopupPending;
                     timer.PopupDeadline = now.AddSeconds(_popupGracePeriodSeconds);
-                    _logger.LogInformation("Sleep timer expired for session {SessionId} — popup pending (grace period: {Seconds}s)",
-                        timer.SessionId, _popupGracePeriodSeconds);
+
+                    // Capture fade settings now so a mid-popup config change
+                    // cannot desync the client's ramp from the stop deadline.
+                    timer.FadeDurationSeconds = _enableVolumeFade
+                        ? ComputeFadeDuration(_popupGracePeriodSeconds)
+                        : 0;
+                    timer.FadeEnabled = timer.FadeDurationSeconds > 0;
+
+                    _logger.LogInformation(
+                        "Sleep timer expired for session {SessionId} — popup pending (grace period: {Seconds}s, fade: {Fade}s)",
+                        timer.SessionId,
+                        _popupGracePeriodSeconds,
+                        timer.FadeDurationSeconds);
+
                     TimerUpdated?.Invoke(this, new SleepTimerEventArgs(timer));
                 }
                 else
@@ -269,6 +324,8 @@ public class SleepTimerManager : IDisposable
 
     /// <summary>
     /// Sends a Stop playstate command to the client via the session manager.
+    /// Volume restoration is handled client-side before this fires — the
+    /// server has no access to the browser's volume state.
     /// </summary>
     private async Task StopPlaybackAsync(SleepTimer timer)
     {
